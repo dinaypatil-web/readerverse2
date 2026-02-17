@@ -63,5 +63,5 @@ export function useAutoScroll(
 
         if (isPlaying) rafId = requestAnimationFrame(animate);
         return () => { if (rafId) cancelAnimationFrame(rafId); };
-    }, [scrollMode, scrollSpeed, isPlaying, isActive, currentWordIndex]);
+    }, [scrollMode, scrollSpeed, isPlaying, isActive]);
 }
