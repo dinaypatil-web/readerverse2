@@ -36,15 +36,19 @@ export function useAutoScroll(
 
             const cRect = container.getBoundingClientRect();
             const wRect = word.getBoundingClientRect();
+            const targetY = cRect.top + cRect.height * 0.5;
+            const diff = wRect.top - targetY;
+
+            // Instant jump threshold (30% of container height)
+            if (Math.abs(diff) > container.clientHeight * 0.3) {
+                container.scrollTop += diff;
+                // Don't skip the rest, let lerp handle fine-tuning
+            }
 
             if (scrollMode === 'follow') {
-                const targetY = cRect.top + cRect.height * 0.5;
-                const diff = wRect.top - targetY;
-                if (Math.abs(diff) > 2) container.scrollTop += diff * lerp;
+                if (Math.abs(diff) > 1) container.scrollTop += diff * lerp;
             } else if (scrollMode === 'snap') {
                 if (wRect.top < cRect.top + 100 || wRect.bottom > cRect.bottom - 150) {
-                    const targetY = cRect.top + cRect.height * 0.5;
-                    const diff = wRect.top - targetY;
                     container.scrollTop += diff * 0.2;
                 }
             }

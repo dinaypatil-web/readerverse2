@@ -18,7 +18,7 @@ interface FloatingControlsProps {
     scrollSpeed: ScrollSpeed;
     setScrollSpeed: (v: ScrollSpeed) => void;
     togglePlayback: () => void;
-    jumpTo: (idx: number) => void;
+    jumpTo: (idx: number, limitWords?: number) => void;
     skipSentence: (d: 1 | -1) => void;
     skipParagraph: (d: 1 | -1) => void;
     addBookmark: () => void;
