@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ReaderVerse 2 — Premium Neural eBook Reader</title>
+    <meta name="description" content="Advanced eBook Reader with word-level TTS sync, intelligent auto-scroll, and smart resume. Supports PDF, EPUB, DOCX, TXT, and MOBI.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.3);
+            --glass-blur: 24px;
+            --accent: 37 99 235;
+            --accent-glow: rgba(37, 99, 235, 0.15);
+        }
+
+        .dark {
+            --glass-bg: rgba(9, 9, 11, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.05);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+            overscroll-behavior-y: contain;
+            -webkit-tap-highlight-color: transparent;
+            margin: 0;
+            padding: 0;
+            background-color: #f8fafc;
+        }
+
+        .reader-text {
+            font-family: 'Lora', serif;
+        }
+
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+        }
+
+        .safe-bottom {
+            padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Premium Word Highlight */
+        .word-highlight {
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: center;
+        }
+        .word-active {
+            background: rgba(var(--accent), 0.1);
+            color: rgb(var(--accent));
+            font-weight: 700;
+            transform: scale(1.1);
+            z-index: 20;
+            box-shadow: 0 0 20px var(--accent-glow);
+            outline: 1px solid rgba(var(--accent), 0.2);
+            border-radius: 0.5rem;
+        }
+
+        /* Custom range slider */
+        input[type="range"] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: rgb(var(--accent));
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(var(--accent), 0.4);
+            border: 3px solid white;
+            transition: all 0.2s ease;
+            margin-top: -10px;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: rgba(var(--accent), 0.1);
+            border-radius: 2px;
+        }
+
+        .animate-float {
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        .animate-slide-up { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        @keyframes slideLeft {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+        .animate-slide-left { animation: slideLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent), 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(var(--accent), 0); }
+        }
+        .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+</head>
+<body class="antialiased overflow-hidden">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>
