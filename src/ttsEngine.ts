@@ -231,10 +231,28 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             const subStr = text.substring(0, e.charIndex).trim();
             const count = subStr ? subStr.split(/\s+/).length : 0;
             const global = block.wordStartIndex + offset + count;
+
             if (global >= wordIdxRef.current) {
+                const prevIdx = wordIdxRef.current;
                 wordIdxRef.current = global;
-                setCurrentWordIndex(global);
+
+                // 1. Emit low-latency CustomEvent for granular UI updates (highlighting)
+                window.dispatchEvent(new CustomEvent('word-index-update', {
+                    detail: { index: global, prevIndex: prevIdx }
+                }));
+
+                // 2. Refresh Media Session
                 updateMediaSessionPosition();
+
+                // 3. Throttle React state updates to avoid sluggishness
+                // Update state only if we changed blocks, or every ~10 words
+                const prevBlockIdx = findBlockIdx(prevIdx, activeBook.displayBlocks);
+                const currentBlockIdx = findBlockIdx(global, activeBook.displayBlocks);
+
+                if (prevBlockIdx !== currentBlockIdx || global % 10 === 0) {
+                    setCurrentWordIndex(global);
+                    saveProgressThrottled();
+                }
             }
         };
         utt.onstart = () => {
@@ -286,12 +304,33 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         window.speechSynthesis.cancel();
         const limit = limitWords !== undefined ? limitWords : totalWordsCount;
         const safeIdx = Math.max(0, limit > 0 ? Math.min(idx, limit - 1) : idx);
+
+        const prevIdx = wordIdxRef.current;
         wordIdxRef.current = safeIdx;
-        setCurrentWordIndex(safeIdx);
+
+        // 1. Emit low-latency CustomEvent for manual jumps
+        window.dispatchEvent(new CustomEvent('word-index-update', {
+            detail: { index: safeIdx, prevIndex: prevIdx }
+        }));
+
+        // 2. Refresh Media Session
         updateMediaSessionPosition();
-        if (activeBook) updateBookProgress(activeBook.id, safeIdx);
+
+        if (activeBook) {
+            updateBookProgress(activeBook.id, safeIdx);
+
+            // 3. Throttle React state updates
+            const prevBlockIdx = findBlockIdx(prevIdx, activeBook.displayBlocks);
+            const currentBlockIdx = findBlockIdx(safeIdx, activeBook.displayBlocks);
+
+            if (prevBlockIdx !== currentBlockIdx || !isPlayingRef.current) {
+                setCurrentWordIndex(safeIdx);
+                saveProgressThrottled();
+            }
+        }
+
         if (isPlayingRef.current) setTimeout(speak, 50);
-    }, [totalWordsCount, speak, activeBook, updateMediaSessionPosition]);
+    }, [totalWordsCount, speak, activeBook, updateMediaSessionPosition, saveProgressThrottled]);
 
     // ============================================================
     // SKIP SENTENCE / PARAGRAPH

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import {
     Play, Pause, SkipForward, SkipBack, Bookmark,
     ChevronUp, ChevronDown, Eye, Crosshair, Hand, Clock
@@ -32,7 +32,7 @@ interface FloatingControlsProps {
     openSettings: () => void;
 }
 
-export const FloatingControls: React.FC<FloatingControlsProps> = ({
+export const FloatingControls: React.FC<FloatingControlsProps> = memo(({
     isPlaying, isPanelExpanded, setIsPanelExpanded,
     currentWordIndex, totalWordsCount,
     playbackSpeed, setPlaybackSpeed,
@@ -42,12 +42,25 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
     sleepTimerMinutes, sleepTimerEnd, sleepTimerRemaining, setSleepTimer,
     activeBook, currentChapter, wordIdxRef, openSettings
 }) => {
+    const progressBarRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleWordUpdate = (e: Event) => {
+            if (!progressBarRef.current || totalWordsCount <= 0) return;
+            const index = (e as CustomEvent).detail.index;
+            const percentage = (index / totalWordsCount) * 100;
+            progressBarRef.current.style.width = `${percentage}%`;
+        };
+        window.addEventListener('word-index-update', handleWordUpdate);
+        return () => window.removeEventListener('word-index-update', handleWordUpdate);
+    }, [totalWordsCount]);
+
     return (
         <div className="absolute bottom-10 left-0 right-0 px-4 z-50 pointer-events-none flex justify-center">
             <div className={`w-full max-w-lg glass pointer-events-auto ${isPanelExpanded ? 'rounded-[2rem]' : 'rounded-full'} border border-white/20 dark:border-white/5 shadow-[0_25px_60px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col transition-all duration-300`}>
                 {/* Progress Bar */}
                 <div className="w-full h-[3px] bg-zinc-500/10 flex">
-                    <div className="h-full bg-blue-600 transition-all duration-300 shadow-[0_0_8px_rgba(37,99,235,0.6)]"
+                    <div ref={progressBarRef} className="h-full bg-blue-600 transition-all duration-300 shadow-[0_0_8px_rgba(37,99,235,0.6)]"
                         style={{ width: `${(currentWordIndex / Math.max(1, totalWordsCount)) * 100}%` }} />
                 </div>
 
@@ -200,4 +213,4 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
             </div>
         </div>
     );
-};
+});
