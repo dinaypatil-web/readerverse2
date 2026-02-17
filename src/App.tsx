@@ -224,8 +224,14 @@ const App = () => {
                 {view === 'library' ? (
                     <Library books={books} onOpenBook={openBook} onDeleteBook={deleteBook} onImport={handleFileUpload} />
                 ) : (
-                    <div className="h-full flex flex-col">
-                        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-8 py-24 no-scrollbar scroll-smooth">
+                    <div className="h-full flex flex-col relative">
+                        {/* Reading Guide Visual Anchor */}
+                        <div className="fixed inset-x-0 top-1/2 -translate-y-1/2 h-[60px] pointer-events-none z-10 hidden md:block">
+                            <div className="absolute top-0 w-full h-px bg-blue-600/10 dark:bg-blue-400/5 shadow-[0_0_15px_rgba(37,99,235,0.1)]" />
+                            <div className="absolute bottom-0 w-full h-px bg-blue-600/10 dark:bg-blue-400/5 shadow-[0_0_15px_rgba(37,99,235,0.1)]" />
+                        </div>
+
+                        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-8 py-24 no-scrollbar">
                             <article className="max-w-2xl mx-auto space-y-16 pb-[450px]">
                                 {visibleBlocks.map(b => (
                                     <WordBlock key={b.wordStartIndex} block={b} currentWordIndex={tts.currentWordIndex}

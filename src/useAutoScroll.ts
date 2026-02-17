@@ -28,8 +28,8 @@ export function useAutoScroll(
         }
 
         let rafId: number;
-        // Increased lerp factors for tighter centering
-        const lerpFactors: Record<ScrollSpeed, number> = { slow: 0.1, medium: 0.15, fast: 0.25 };
+        // Aggressive lerp factors for absolute center-lock
+        const lerpFactors: Record<ScrollSpeed, number> = { slow: 0.15, medium: 0.25, fast: 0.4 };
         const lerp = lerpFactors[scrollSpeed];
 
         const animate = () => {
@@ -40,22 +40,22 @@ export function useAutoScroll(
             const cRect = container.getBoundingClientRect();
             const wRect = word.getBoundingClientRect();
 
-            // Recalculate based on true screen center and word vertical midpoint
+            // Absolute screen center targeting
             const targetY = window.innerHeight / 2;
-            const wordCenter = wRect.top + wRect.height / 2;
+            const wordCenter = wRect.top + (wRect.height / 2);
             const diff = wordCenter - targetY;
 
-            // Instant jump threshold (30% of container height)
-            if (Math.abs(diff) > container.clientHeight * 0.3) {
+            // Instant jump for transitions
+            if (Math.abs(diff) > container.clientHeight * 0.25) {
                 container.scrollTop += diff;
             }
 
             if (scrollMode === 'follow') {
-                if (Math.abs(diff) > 0.5) container.scrollTop += diff * lerp;
+                // Smooth glide to center
+                if (Math.abs(diff) > 0.1) container.scrollTop += diff * lerp;
             } else if (scrollMode === 'snap') {
-                // Snap if far from center
-                if (Math.abs(diff) > 100) {
-                    container.scrollTop += diff * 0.25;
+                if (Math.abs(diff) > 80) {
+                    container.scrollTop += diff * 0.4;
                 }
             }
             rafId = requestAnimationFrame(animate);
