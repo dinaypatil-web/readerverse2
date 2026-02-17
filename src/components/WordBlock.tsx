@@ -11,6 +11,7 @@ interface WordBlockProps {
 
 export const WordBlock = memo(({ block, currentWordIndex, onWordClick, fontSize, activeWordRef }: WordBlockProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
+    const elementsCache = useRef<Map<number, HTMLSpanElement>>(new Map());
 
     useEffect(() => {
         const handleWordUpdate = (e: Event) => {
@@ -20,11 +21,11 @@ export const WordBlock = memo(({ block, currentWordIndex, onWordClick, fontSize,
             const isPrevIn = prevIndex >= block.wordStartIndex && prevIndex < block.wordStartIndex + block.wordCount;
             const isCurrentIn = index >= block.wordStartIndex && index < block.wordStartIndex + block.wordCount;
 
-            if (!containerRef.current || (!isPrevIn && !isCurrentIn)) return;
+            if (!isPrevIn && !isCurrentIn) return;
 
             // Remove previous active class
             if (isPrevIn) {
-                const prevEl = containerRef.current.querySelector(`[data-idx="${prevIndex}"]`);
+                const prevEl = elementsCache.current.get(prevIndex);
                 if (prevEl) {
                     prevEl.classList.remove('word-active');
                     prevEl.classList.add('opacity-70', 'dark:text-zinc-300');
@@ -33,7 +34,7 @@ export const WordBlock = memo(({ block, currentWordIndex, onWordClick, fontSize,
 
             // Add new active class
             if (isCurrentIn) {
-                const currentEl = containerRef.current.querySelector(`[data-idx="${index}"]`) as HTMLSpanElement;
+                const currentEl = elementsCache.current.get(index);
                 if (currentEl) {
                     currentEl.classList.add('word-active');
                     currentEl.classList.remove('opacity-70', 'dark:text-zinc-300');
@@ -56,9 +57,13 @@ export const WordBlock = memo(({ block, currentWordIndex, onWordClick, fontSize,
                 return (
                     <span
                         key={wIdx}
+                        ref={(el) => {
+                            if (el) elementsCache.current.set(globalIdx, el);
+                            else elementsCache.current.delete(globalIdx);
+                        }}
                         data-idx={globalIdx}
                         onClick={() => onWordClick(globalIdx)}
-                        className={`word-highlight relative inline-block mr-[0.28em] px-1.5 py-0.5 rounded-lg cursor-pointer select-none touch-manipulation transition-all duration-75 ${isCurrent
+                        className={`word-highlight relative inline-block mr-[0.28em] px-1.5 py-0.5 rounded-lg cursor-pointer select-none touch-manipulation ${isCurrent
                             ? 'word-active'
                             : 'opacity-70 hover:opacity-100 dark:text-zinc-300'
                             }`}
@@ -69,10 +74,11 @@ export const WordBlock = memo(({ block, currentWordIndex, onWordClick, fontSize,
             })}
         </div>
     );
-}, (prev, next) => {
-    const isIn = (idx: number, b: TextBlock) => idx >= b.wordStartIndex && idx < b.wordStartIndex + b.wordCount;
-    const prevWasIn = isIn(prev.currentWordIndex, prev.block);
-    const nextIsIn = isIn(next.currentWordIndex, next.block);
-    if (!prevWasIn && !nextIsIn) return prev.fontSize === next.fontSize;
-    return prev.currentWordIndex === next.currentWordIndex && prev.fontSize === next.fontSize;
-});
+},
+    (prev, next) => {
+        const isIn = (idx: number, b: TextBlock) => idx >= b.wordStartIndex && idx < b.wordStartIndex + b.wordCount;
+        const prevWasIn = isIn(prev.currentWordIndex, prev.block);
+        const nextIsIn = isIn(next.currentWordIndex, next.block);
+        if (!prevWasIn && !nextIsIn) return prev.fontSize === next.fontSize;
+        return prev.currentWordIndex === next.currentWordIndex && prev.fontSize === next.fontSize;
+    });
