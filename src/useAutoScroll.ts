@@ -18,15 +18,18 @@ export function useAutoScroll(
             if (!isPlaying && activeWordRef.current && scrollContainerRef.current) {
                 const c = scrollContainerRef.current;
                 const w = activeWordRef.current;
-                const targetY = c.getBoundingClientRect().top + c.getBoundingClientRect().height * 0.5;
-                const diff = w.getBoundingClientRect().top - targetY;
-                if (Math.abs(diff) > 100) c.scrollTo({ top: c.scrollTop + diff, behavior: 'auto' });
+                const wRect = w.getBoundingClientRect();
+                const targetY = window.innerHeight / 2;
+                const wordCenter = wRect.top + wRect.height / 2;
+                const diff = wordCenter - targetY;
+                if (Math.abs(diff) > 50) c.scrollTo({ top: c.scrollTop + diff, behavior: 'auto' });
             }
             return;
         }
 
         let rafId: number;
-        const lerpFactors: Record<ScrollSpeed, number> = { slow: 0.03, medium: 0.08, fast: 0.15 };
+        // Increased lerp factors for tighter centering
+        const lerpFactors: Record<ScrollSpeed, number> = { slow: 0.1, medium: 0.15, fast: 0.25 };
         const lerp = lerpFactors[scrollSpeed];
 
         const animate = () => {
@@ -36,20 +39,23 @@ export function useAutoScroll(
 
             const cRect = container.getBoundingClientRect();
             const wRect = word.getBoundingClientRect();
-            const targetY = cRect.top + cRect.height * 0.5;
-            const diff = wRect.top - targetY;
+
+            // Recalculate based on true screen center and word vertical midpoint
+            const targetY = window.innerHeight / 2;
+            const wordCenter = wRect.top + wRect.height / 2;
+            const diff = wordCenter - targetY;
 
             // Instant jump threshold (30% of container height)
             if (Math.abs(diff) > container.clientHeight * 0.3) {
                 container.scrollTop += diff;
-                // Don't skip the rest, let lerp handle fine-tuning
             }
 
             if (scrollMode === 'follow') {
-                if (Math.abs(diff) > 1) container.scrollTop += diff * lerp;
+                if (Math.abs(diff) > 0.5) container.scrollTop += diff * lerp;
             } else if (scrollMode === 'snap') {
-                if (wRect.top < cRect.top + 100 || wRect.bottom > cRect.bottom - 150) {
-                    container.scrollTop += diff * 0.2;
+                // Snap if far from center
+                if (Math.abs(diff) > 100) {
+                    container.scrollTop += diff * 0.25;
                 }
             }
             rafId = requestAnimationFrame(animate);
