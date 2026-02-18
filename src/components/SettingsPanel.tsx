@@ -23,10 +23,6 @@ interface SettingsPanelProps {
     setScrollMode: (v: ScrollMode) => void;
     scrollSpeed: ScrollSpeed;
     setScrollSpeed: (v: ScrollSpeed) => void;
-    kaniApiKey: string;
-    setKaniApiKey: (v: string) => void;
-    kaniBaseUrl: string;
-    setKaniBaseUrl: (v: string) => void;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -38,7 +34,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     theme, setTheme,
     playbackSpeed, setPlaybackSpeed,
     scrollMode, setScrollMode, scrollSpeed, setScrollSpeed,
-    kaniApiKey, setKaniApiKey, kaniBaseUrl, setKaniBaseUrl,
 }) => {
     if (!isOpen) return null;
 
@@ -55,7 +50,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     {/* TTS Provider */}
                     <div className="space-y-6">
                         <span className="text-[11px] font-black opacity-30 uppercase tracking-widest block">Neural Provider</span>
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 gap-4">
                             <button onClick={() => setTtsProvider('system')}
                                 className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all ${ttsProvider === 'system' ? 'border-blue-600 bg-blue-600 text-white shadow-xl' : 'border-zinc-500/5 bg-zinc-500/5 opacity-40'}`}>
                                 <Globe size={24} />
@@ -66,39 +61,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 <Volume2 size={24} />
                                 <span className="text-xs font-black uppercase tracking-tighter">Neural AI</span>
                             </button>
-                            <button onClick={() => setTtsProvider('kanitts')}
-                                className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all ${ttsProvider === 'kanitts' ? 'border-blue-600 bg-blue-600 text-white shadow-xl' : 'border-zinc-500/5 bg-zinc-500/5 opacity-40'}`}>
-                                <Globe size={24} className="rotate-12" />
-                                <span className="text-xs font-black uppercase tracking-tighter">KaniTTS</span>
-                            </button>
                         </div>
                     </div>
-
-                    {/* KaniTTS Configuration */}
-                    {ttsProvider === 'kanitts' && (
-                        <div className="space-y-8 p-8 rounded-[3rem] bg-blue-600/5 border-2 border-blue-600/10 animate-in fade-in slide-in-from-top-4 duration-500">
-                            <div className="space-y-4">
-                                <span className="text-[10px] font-black opacity-40 uppercase tracking-widest pl-2">NineNineSix API Base URL</span>
-                                <input
-                                    type="text"
-                                    value={kaniBaseUrl}
-                                    onChange={e => setKaniBaseUrl(e.target.value)}
-                                    placeholder="https://api.nineninesix.ai/v1/tts"
-                                    className="w-full p-6 rounded-3xl bg-white/5 border-2 border-transparent focus:border-blue-600 outline-none font-bold text-sm shadow-inner"
-                                />
-                            </div>
-                            <div className="space-y-4">
-                                <span className="text-[10px] font-black opacity-40 uppercase tracking-widest pl-2">API Key (Optional)</span>
-                                <input
-                                    type="password"
-                                    value={kaniApiKey}
-                                    onChange={e => setKaniApiKey(e.target.value)}
-                                    placeholder="Enter API Key"
-                                    className="w-full p-6 rounded-3xl bg-white/5 border-2 border-transparent focus:border-blue-600 outline-none font-bold text-sm shadow-inner"
-                                />
-                            </div>
-                        </div>
-                    )}
 
                     {/* Voice Selector */}
                     {ttsProvider === 'system' && (

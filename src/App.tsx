@@ -314,10 +314,6 @@ const App = () => {
                 setScrollMode={setScrollMode}
                 scrollSpeed={scrollSpeed}
                 setScrollSpeed={setScrollSpeed}
-                kaniApiKey={tts.kaniApiKey}
-                setKaniApiKey={tts.setKaniApiKey}
-                kaniBaseUrl={tts.kaniBaseUrl}
-                setKaniBaseUrl={tts.setKaniBaseUrl}
             />
         </div>
     );

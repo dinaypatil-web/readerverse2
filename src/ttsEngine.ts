@@ -12,8 +12,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
     const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() => localStorage.getItem('reader_output_device') || "");
     const [ttsProvider, setTtsProvider] = useState<TtsProvider>(() => (localStorage.getItem('reader_provider') as any) || 'system');
-    const [kaniApiKey, setKaniApiKey] = useState(() => localStorage.getItem('reader_kani_key') || "");
-    const [kaniBaseUrl, setKaniBaseUrl] = useState(() => localStorage.getItem('reader_kani_url') || "https://api.nineninesix.ai/v1/tts");
     const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
     const [sleepTimerEnd, setSleepTimerEnd] = useState<number | null>(null);
     const [sleepTimerRemaining, setSleepTimerRemaining] = useState('');
@@ -27,16 +25,12 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const wakeLockRef = useRef<WakeLockSentinel | null>(null);
     const sleepTimerIntervalRef = useRef<number | null>(null);
     const chromeBgIntervalRef = useRef<number | null>(null);
-    const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
-    const speakRef = useRef<() => void>(() => { });
 
     // Persist settings
     useEffect(() => localStorage.setItem('reader_speed', playbackSpeed.toString()), [playbackSpeed]);
     useEffect(() => localStorage.setItem('reader_provider', ttsProvider), [ttsProvider]);
     useEffect(() => { if (selectedVoiceURI) localStorage.setItem('reader_voice', selectedVoiceURI); }, [selectedVoiceURI]);
     useEffect(() => { if (selectedDeviceId) localStorage.setItem('reader_output_device', selectedDeviceId); }, [selectedDeviceId]);
-    useEffect(() => localStorage.setItem('reader_kani_key', kaniApiKey), [kaniApiKey]);
-    useEffect(() => localStorage.setItem('reader_kani_url', kaniBaseUrl), [kaniBaseUrl]);
 
     const totalWordsCount = useMemo(() => {
         if (!activeBook) return 0;
@@ -247,7 +241,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             wordIdxRef.current = next;
             setCurrentWordIndex(next);
             saveProgressThrottled();
-            setTimeout(() => { if (sId === speechSessionIdRef.current) speakRef.current(); }, 50);
+            setTimeout(() => { if (sId === speechSessionIdRef.current) speak(); }, 50);
         } else {
             setIsPlaying(false); isPlayingRef.current = false;
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
@@ -258,82 +252,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         }
     }, [totalWordsCount, stopChromeBgWorkaround, saveProgressImmediate, releaseWakeLock, saveProgressThrottled, setCurrentWordIndex]);
 
-    const speakWithKani = useCallback(async (text: string, block: any, offset: number, sId: number) => {
-
-        try {
-            const response = await fetch(kaniBaseUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': kaniApiKey ? `Bearer ${kaniApiKey}` : ''
-                },
-                body: JSON.stringify({
-                    text,
-                    voice: selectedVoiceURI || 'standard',
-                    lang: activeBook?.language || 'en',
-                    speed: playbackSpeed
-                })
-            });
-
-            if (!response.ok) throw new Error('KaniTTS Failed');
-            if (sId !== speechSessionIdRef.current) return;
-
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-
-            if (!remoteAudioRef.current) remoteAudioRef.current = new Audio();
-            const audio = remoteAudioRef.current;
-            audio.src = url;
-
-            // Apply output device if supported
-            if (selectedDeviceId && 'setSinkId' in (audio as any)) {
-                (audio as any).setSinkId(selectedDeviceId).catch(() => { });
-            }
-
-            audio.onplay = () => {
-                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-                requestWakeLock();
-            };
-
-            audio.onended = () => {
-                URL.revokeObjectURL(url);
-                if (sId !== speechSessionIdRef.current) return;
-                advanceToNextBlock(sId, block);
-            };
-
-            // Estimate word highlighting (best effort for binary audio)
-            const duration = await new Promise<number>((resolve) => {
-                audio.onloadedmetadata = () => resolve(audio.duration);
-            });
-
-            const words = text.split(/\s+/);
-            const msPerWord = (duration * 1000) / words.length;
-
-            let wordCounter = 0;
-            const highlightTimer = setInterval(() => {
-                if (sId !== speechSessionIdRef.current || audio.paused || audio.ended) {
-                    clearInterval(highlightTimer);
-                    return;
-                }
-
-                wordCounter++;
-                const global = block.wordStartIndex + offset + wordCounter;
-                if (global <= block.wordStartIndex + block.wordCount) {
-                    wordIdxRef.current = global;
-                    window.dispatchEvent(new CustomEvent('word-index-update', {
-                        detail: { index: global, prevIndex: global - 1 }
-                    }));
-                    if (global % 5 === 0) setCurrentWordIndex(global);
-                }
-            }, msPerWord);
-
-            audio.play();
-
-        } catch (err) {
-            console.error(err);
-            setIsPlaying(false); isPlayingRef.current = false;
-        }
-    }, [kaniBaseUrl, kaniApiKey, selectedVoiceURI, playbackSpeed, selectedDeviceId, requestWakeLock, saveProgressThrottled, advanceToNextBlock, activeBook, setCurrentWordIndex]);
 
     const speakWithSystem = useCallback(async (text: string, block: any, offset: number, sId: number) => {
         window.speechSynthesis.cancel();
@@ -405,14 +323,10 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             return;
         }
 
-        if (ttsProvider === 'system') {
-            speakWithSystem(text, block, offset, sId);
-        } else if (ttsProvider === 'kanitts') {
-            speakWithKani(text, block, offset, sId);
-        }
-    }, [ttsProvider, activeBook, speakWithSystem, speakWithKani, advanceToNextBlock]);
+        speakWithSystem(text, block, offset, sId);
+    }, [activeBook, speakWithSystem, advanceToNextBlock]);
 
-    useEffect(() => { speakRef.current = speak; }, [speak]);
+
 
     // ============================================================
     // TOGGLE PLAYBACK
@@ -422,7 +336,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             setIsPlaying(false); isPlayingRef.current = false;
             isInterruptedRef.current = false;
             window.speechSynthesis.cancel();
-            if (remoteAudioRef.current) remoteAudioRef.current.pause();
             speechSessionIdRef.current++;
             if (heartbeatRef.current) heartbeatRef.current.pause();
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
@@ -435,7 +348,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             if (ttsProvider === 'system') startChromeBgWorkaround();
             speak();
         }
-    }, [speak, saveProgressImmediate, requestWakeLock, releaseWakeLock, startChromeBgWorkaround, stopChromeBgWorkaround, ttsProvider]);
+    }, [speak, saveProgressImmediate, requestWakeLock, releaseWakeLock, startChromeBgWorkaround, stopChromeBgWorkaround]);
 
     // ============================================================
     // JUMP TO WORD
@@ -444,7 +357,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         speechSessionIdRef.current++;
         isInterruptedRef.current = false;
         window.speechSynthesis.cancel();
-        if (remoteAudioRef.current) remoteAudioRef.current.pause();
         const limit = limitWords !== undefined ? limitWords : totalWordsCount;
         const safeIdx = Math.max(0, limit > 0 ? Math.min(idx, limit - 1) : idx);
 
@@ -625,7 +537,5 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         sleepTimerMinutes, sleepTimerRemaining, setSleepTimer, sleepTimerEnd,
         saveProgressImmediate, releaseWakeLock,
         wordIdxRef,
-        kaniApiKey, setKaniApiKey,
-        kaniBaseUrl, setKaniBaseUrl,
     };
 }
