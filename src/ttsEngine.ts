@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Book, TtsProvider, ScrollMode } from './types';
 import { updateBookProgress } from './persistence';
 import { findBlockIdx } from './parsers';
-import { getOpenAiTtsAudio } from './openaiTts';
 
 export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const [isPlaying, setIsPlaying] = useState(false);
@@ -21,10 +20,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const [sleepTimerEnd, setSleepTimerEnd] = useState<number | null>(null);
     const [sleepTimerRemaining, setSleepTimerRemaining] = useState('');
 
-    const [openaiApiKey, setOpenaiApiKey] = useState(() => localStorage.getItem('reader_openai_key') || "");
-    const [openaiVoice, setOpenaiVoice] = useState(() => localStorage.getItem('reader_openai_voice') || "alloy");
-    const [isBuffering, setIsBuffering] = useState(false);
-
     const isPlayingRef = useRef(false);
     const isInterruptedRef = useRef(false);
     const wordIdxRef = useRef(0);
@@ -41,8 +36,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     useEffect(() => localStorage.setItem('reader_provider', ttsProvider), [ttsProvider]);
     useEffect(() => { if (selectedVoiceURI) localStorage.setItem('reader_voice', selectedVoiceURI); }, [selectedVoiceURI]);
     useEffect(() => { if (selectedDeviceId) localStorage.setItem('reader_output_device', selectedDeviceId); }, [selectedDeviceId]);
-    useEffect(() => { localStorage.setItem('reader_openai_key', openaiApiKey); }, [openaiApiKey]);
-    useEffect(() => { localStorage.setItem('reader_openai_voice', openaiVoice); }, [openaiVoice]);
 
     const totalWordsCount = useMemo(() => {
         if (!activeBook) return 0;
@@ -337,48 +330,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     }, [availableVoices, selectedVoiceURI, playbackSpeed, saveProgressThrottled, updateMediaSessionPosition, requestWakeLock, startChromeBgWorkaround, advanceToNextBlock, activeBook, setCurrentWordIndex]);
 
 
-    const speakWithOpenAi = useCallback(async (text: string, block: any, offset: number, sId: number) => {
-        try {
-            setIsBuffering(true);
-            const audioUrl = await getOpenAiTtsAudio(text, openaiApiKey, openaiVoice, playbackSpeed);
-            if (sId !== speechSessionIdRef.current) return;
-
-            const audio = new Audio(audioUrl);
-            if (selectedDeviceId && 'setSinkId' in (audio as any)) {
-                (audio as any).setSinkId(selectedDeviceId).catch(() => { });
-            }
-
-            audio.onplay = () => {
-                setIsBuffering(false);
-                if (sId === speechSessionIdRef.current) {
-                    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-                    requestWakeLock();
-                }
-            };
-
-            audio.onended = () => {
-                URL.revokeObjectURL(audioUrl);
-                if (sId === speechSessionIdRef.current) advanceToNextBlock(sId, block);
-            };
-
-            audio.onerror = () => {
-                setIsBuffering(false);
-                URL.revokeObjectURL(audioUrl);
-                if (sId === speechSessionIdRef.current) advanceToNextBlock(sId, block);
-            };
-
-            // Since we don't have word boundaries, we'll just update the index to the start of text
-            // In a future version, we could estimate word highlighting
-            setCurrentWordIndex(block.wordStartIndex + offset);
-            audio.play();
-        } catch (error) {
-            console.error(error);
-            setIsBuffering(false);
-            if (sId === speechSessionIdRef.current) advanceToNextBlock(sId, block);
-        }
-    }, [openaiApiKey, openaiVoice, playbackSpeed, selectedDeviceId, requestWakeLock, advanceToNextBlock, setCurrentWordIndex]);
-
-
     const speak = useCallback(async () => {
         if (!activeBook || !isPlayingRef.current) return;
         const sId = speechSessionIdRef.current;
@@ -393,12 +344,8 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             return;
         }
 
-        if (ttsProvider === 'openai') {
-            speakWithOpenAi(text, block, offset, sId);
-        } else {
-            speakWithSystem(text, block, offset, sId);
-        }
-    }, [activeBook, speakWithSystem, speakWithOpenAi, advanceToNextBlock, ttsProvider]);
+        speakWithSystem(text, block, offset, sId);
+    }, [activeBook, speakWithSystem, advanceToNextBlock]);
 
     useEffect(() => { speakRef.current = speak; }, [speak]);
 
@@ -609,9 +556,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         availableVoices, selectedVoiceURI, setSelectedVoiceURI,
         availableDevices, selectedDeviceId, setSelectedDeviceId,
         ttsProvider, setTtsProvider,
-        openaiApiKey, setOpenaiApiKey,
-        openaiVoice, setOpenaiVoice,
-        isBuffering,
         totalWordsCount, currentChapter,
         togglePlayback, jumpTo, speak,
         skipSentence, skipParagraph,

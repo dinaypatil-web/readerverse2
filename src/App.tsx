@@ -268,7 +268,6 @@ const App = () => {
                             currentChapter={tts.currentChapter}
                             wordIdxRef={tts.wordIdxRef}
                             openSettings={() => setIsSettingsOpen(true)}
-                            isBuffering={tts.isBuffering}
                         />
                     </div>
                 )}
@@ -315,11 +314,6 @@ const App = () => {
                 setScrollMode={setScrollMode}
                 scrollSpeed={scrollSpeed}
                 setScrollSpeed={setScrollSpeed}
-                openaiApiKey={tts.openaiApiKey}
-                setOpenaiApiKey={tts.setOpenaiApiKey}
-                openaiVoice={tts.openaiVoice}
-                setOpenaiVoice={tts.setOpenaiVoice}
-                isBuffering={tts.isBuffering}
             />
         </div>
     );
