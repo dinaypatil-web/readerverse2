@@ -1,6 +1,6 @@
 // --- Core Types for ReaderVerse 2 ---
 
-export type TtsProvider = 'system' | 'gemini';
+export type TtsProvider = 'system' | 'gemini' | 'kanitts';
 export type ScrollMode = 'follow' | 'snap' | 'manual';
 export type ScrollSpeed = 'slow' | 'medium' | 'fast';
 
