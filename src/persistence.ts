@@ -32,44 +32,62 @@ const initDB = (): Promise<IDBDatabase> => {
 
 export const updateBookProgress = async (bookId: string, index: number, extraState?: Partial<Book>) => {
     const db = await initDB();
-    const tx = db.transaction(STORE_BOOKS, 'readwrite');
-    const store = tx.objectStore(STORE_BOOKS);
-    const req = store.get(bookId);
-    req.onsuccess = () => {
-        const book = req.result;
-        if (book) {
-            let bookToUpdate = book;
-            if (book.fileData) {
-                bookToUpdate = { ...book, fileData: safeCloneArrayBuffer(book.fileData) };
+    return new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_BOOKS, 'readwrite');
+        const store = tx.objectStore(STORE_BOOKS);
+        const req = store.get(bookId);
+
+        req.onsuccess = () => {
+            const book = req.result;
+            if (book) {
+                // IMPORTANT: We do NOT need to clone the buffer here if we are just updating metadata.
+                // Re-using the existing buffer is safe in IndexedDB and much faster.
+                book.lastIndex = index;
+                if (extraState) Object.assign(book, extraState);
+
+                const putReq = store.put(book);
+                putReq.onsuccess = () => resolve();
+                putReq.onerror = () => reject(putReq.error);
+            } else {
+                resolve();
             }
-            bookToUpdate.lastIndex = index;
-            if (extraState) Object.assign(bookToUpdate, extraState);
-            store.put(bookToUpdate);
-        }
-    };
+        };
+        req.onerror = () => reject(req.error);
+    });
 };
 
 export const saveBookToDB = async (book: Book) => {
-    let bookToSave = book;
-    if (book.fileData) {
-        bookToSave = { ...book, fileData: safeCloneArrayBuffer(book.fileData) };
-    }
     const db = await initDB();
-    const tx = db.transaction(STORE_BOOKS, 'readwrite');
-    tx.objectStore(STORE_BOOKS).put(bookToSave);
+    return new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_BOOKS, 'readwrite');
+        const store = tx.objectStore(STORE_BOOKS);
+
+        // Only clone if it's the first time saving to avoid issues with detached buffers
+        let bookToSave = book;
+        if (book.fileData) {
+            bookToSave = { ...book, fileData: safeCloneArrayBuffer(book.fileData) };
+        }
+
+        const req = store.put(bookToSave);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
 };
 
 export const getBooks = async (): Promise<Book[]> => {
     try {
         const db = await initDB();
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             const tx = db.transaction(STORE_BOOKS, 'readonly');
-            const req = tx.objectStore(STORE_BOOKS).getAll();
+            const store = tx.objectStore(STORE_BOOKS);
+            const req = store.getAll();
+
             req.onsuccess = () => {
                 const books = req.result.map((b: any) => ({
                     ...b,
                     bookmarks: b.bookmarks || [],
-                    ...(b.fileData && { fileData: safeCloneArrayBuffer(b.fileData) })
+                    // We don't necessarily need to clone on read unless we plan to mutate it on UI
+                    // but for safety with threads/workers, we keep it if it's a new instance.
                 }));
                 resolve(books);
             };
@@ -82,5 +100,10 @@ export const getBooks = async (): Promise<Book[]> => {
 
 export const removeBookFromDB = async (id: string) => {
     const db = await initDB();
-    db.transaction(STORE_BOOKS, 'readwrite').objectStore(STORE_BOOKS).delete(id);
+    return new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_BOOKS, 'readwrite');
+        const req = tx.objectStore(STORE_BOOKS).delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+    });
 };

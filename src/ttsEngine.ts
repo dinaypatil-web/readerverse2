@@ -145,6 +145,16 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         }
     }, [activeBook, availableVoices, selectedVoiceURI]);
 
+    // Sync word index when activeBook changes (Book Switch / Load)
+    useEffect(() => {
+        if (activeBook) {
+            const resumeIdx = activeBook.lastIndex || 0;
+            wordIdxRef.current = resumeIdx;
+            lastSavedIndexRef.current = resumeIdx;
+            setCurrentWordIndex(resumeIdx);
+        }
+    }, [activeBook?.id]); // Only trigger when book ID changes
+
     // Apply audio output device (sinkId)
     useEffect(() => {
         if (heartbeatRef.current && selectedDeviceId && 'setSinkId' in (heartbeatRef.current as any)) {
@@ -378,6 +388,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
 
         // 2. Refresh Media Session
         updateMediaSessionPosition();
+        saveProgressImmediate(); // Save immediately on explicit jumps to ensure persistence
 
         if (activeBook) {
             updateBookProgress(activeBook.id, safeIdx);
