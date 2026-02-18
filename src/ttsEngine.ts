@@ -9,6 +9,8 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const [playbackSpeed, setPlaybackSpeed] = useState(() => parseFloat(localStorage.getItem('reader_speed') || '1.0'));
     const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
     const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>(() => localStorage.getItem('reader_voice') || "");
+    const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() => localStorage.getItem('reader_output_device') || "");
     const [ttsProvider, setTtsProvider] = useState<TtsProvider>(() => (localStorage.getItem('reader_provider') as any) || 'system');
     const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
     const [sleepTimerEnd, setSleepTimerEnd] = useState<number | null>(null);
@@ -28,6 +30,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     useEffect(() => localStorage.setItem('reader_speed', playbackSpeed.toString()), [playbackSpeed]);
     useEffect(() => localStorage.setItem('reader_provider', ttsProvider), [ttsProvider]);
     useEffect(() => { if (selectedVoiceURI) localStorage.setItem('reader_voice', selectedVoiceURI); }, [selectedVoiceURI]);
+    useEffect(() => { if (selectedDeviceId) localStorage.setItem('reader_output_device', selectedDeviceId); }, [selectedDeviceId]);
 
     const totalWordsCount = useMemo(() => {
         if (!activeBook) return 0;
@@ -69,12 +72,13 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     }, []);
 
     // ============================================================
-    // VOICE LOADING
+    // VOICE & DEVICE LOADING
     // ============================================================
     useEffect(() => {
         const loadVoices = () => {
             const voices = window.speechSynthesis.getVoices();
             if (voices.length > 0) {
+                // Inclusive sorting: Natural/Online/Premium/Google first, but keep ALL voices
                 const sorted = voices.filter(v => v.lang !== "").sort((a, b) => {
                     const isNatural = (n: string) => n.includes('Natural') || n.includes('Online') || n.includes('Google') || n.includes('Premium');
                     const aN = isNatural(a.name);
@@ -90,11 +94,36 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                 }
             }
         };
+
+        const loadDevices = async () => {
+            try {
+                if ('mediaDevices' in navigator && 'enumerateDevices' in navigator.mediaDevices) {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const outputs = devices.filter(d => d.kind === 'audiooutput');
+                    setAvailableDevices(outputs);
+                }
+            } catch { /* silent */ }
+        };
+
         loadVoices();
+        loadDevices();
         window.speechSynthesis.onvoiceschanged = loadVoices;
+        if ('mediaDevices' in navigator) navigator.mediaDevices.ondevicechange = loadDevices;
+
         const poll = setInterval(loadVoices, 500);
-        return () => { clearInterval(poll); window.speechSynthesis.onvoiceschanged = null; };
+        return () => {
+            clearInterval(poll);
+            window.speechSynthesis.onvoiceschanged = null;
+            if ('mediaDevices' in navigator) navigator.mediaDevices.ondevicechange = null;
+        };
     }, [selectedVoiceURI]);
+
+    // Apply audio output device (sinkId)
+    useEffect(() => {
+        if (heartbeatRef.current && selectedDeviceId && 'setSinkId' in (heartbeatRef.current as any)) {
+            (heartbeatRef.current as any).setSinkId(selectedDeviceId).catch(() => { });
+        }
+    }, [selectedDeviceId]);
 
     // ============================================================
     // PROGRESS SAVING - frequent saves for reliable resume
@@ -466,6 +495,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         isPlaying, currentWordIndex, setCurrentWordIndex,
         playbackSpeed, setPlaybackSpeed,
         availableVoices, selectedVoiceURI, setSelectedVoiceURI,
+        availableDevices, selectedDeviceId, setSelectedDeviceId,
         ttsProvider, setTtsProvider,
         totalWordsCount, currentChapter,
         togglePlayback, jumpTo, speak,

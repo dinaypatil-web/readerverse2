@@ -10,6 +10,9 @@ interface SettingsPanelProps {
     availableVoices: SpeechSynthesisVoice[];
     selectedVoiceURI: string;
     setSelectedVoiceURI: (v: string) => void;
+    availableDevices: MediaDeviceInfo[];
+    selectedDeviceId: string;
+    setSelectedDeviceId: (v: string) => void;
     fontSize: number;
     setFontSize: (v: number) => void;
     theme: 'light' | 'dark' | 'sepia';
@@ -26,6 +29,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     isOpen, onClose,
     ttsProvider, setTtsProvider,
     availableVoices, selectedVoiceURI, setSelectedVoiceURI,
+    availableDevices, selectedDeviceId, setSelectedDeviceId,
     fontSize, setFontSize,
     theme, setTheme,
     playbackSpeed, setPlaybackSpeed,
@@ -80,6 +84,26 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             </div>
                         </div>
                     )}
+
+                    {/* Audio Output Selector */}
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center">
+                            <span className="text-[11px] font-black opacity-30 uppercase tracking-widest">Audio Output</span>
+                            <span className="text-[10px] font-black text-blue-600 bg-blue-600/10 px-3 py-1 rounded-full uppercase">{availableDevices.length} Devices</span>
+                        </div>
+                        <div className="relative group">
+                            <select value={selectedDeviceId} onChange={e => setSelectedDeviceId(e.target.value)}
+                                className="w-full p-6 pr-12 rounded-[2.5rem] bg-zinc-500/5 border-2 border-transparent focus:border-blue-600 outline-none font-bold appearance-none dark:text-white transition-all truncate shadow-inner">
+                                <option value="">Default System Output</option>
+                                {availableDevices.map(d => (
+                                    <option key={d.deviceId} value={d.deviceId}>
+                                        {d.label || `Speaker/Headphones (${d.deviceId.slice(0, 5)})`}
+                                    </option>
+                                ))}
+                            </select>
+                            <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 rotate-90 opacity-40 pointer-events-none" />
+                        </div>
+                    </div>
 
                     {/* Font Size */}
                     <div className="space-y-6">

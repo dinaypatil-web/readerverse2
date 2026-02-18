@@ -300,6 +300,9 @@ const App = () => {
                 availableVoices={tts.availableVoices}
                 selectedVoiceURI={tts.selectedVoiceURI}
                 setSelectedVoiceURI={tts.setSelectedVoiceURI}
+                availableDevices={tts.availableDevices}
+                selectedDeviceId={tts.selectedDeviceId}
+                setSelectedDeviceId={tts.setSelectedDeviceId}
                 fontSize={fontSize}
                 setFontSize={setFontSize}
                 theme={theme}
