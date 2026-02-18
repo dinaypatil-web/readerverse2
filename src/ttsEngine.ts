@@ -15,6 +15,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const [sleepTimerRemaining, setSleepTimerRemaining] = useState('');
 
     const isPlayingRef = useRef(false);
+    const isInterruptedRef = useRef(false);
     const wordIdxRef = useRef(0);
     const speechSessionIdRef = useRef(0);
     const heartbeatRef = useRef<HTMLAudioElement | null>(null);
@@ -42,22 +43,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         }
         return activeBook.chapters[0];
     }, [activeBook, currentWordIndex]);
-
-    // ============================================================
-    // BACKGROUND AUDIO HEARTBEAT
-    // A looping silent audio keeps the browser tab "alive" in background,
-    // preventing the browser from suspending timers/speech synthesis.
-    // ============================================================
-    useEffect(() => {
-        const audio = new Audio();
-        // 1-second silent WAV — enough to register as active media playback
-        audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
-        audio.loop = true;
-        audio.volume = 0.01; // near-silent but enough for media session
-        audio.preload = "auto";
-        heartbeatRef.current = audio;
-        return () => { if (heartbeatRef.current) { heartbeatRef.current.pause(); heartbeatRef.current.src = ""; } };
-    }, []);
 
     // ============================================================
     // WAKE LOCK - prevent screen from sleeping during playback
@@ -278,6 +263,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const togglePlayback = useCallback(() => {
         if (isPlayingRef.current) {
             setIsPlaying(false); isPlayingRef.current = false;
+            isInterruptedRef.current = false;
             window.speechSynthesis.cancel();
             speechSessionIdRef.current++;
             if (heartbeatRef.current) heartbeatRef.current.pause();
@@ -287,6 +273,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             releaseWakeLock();
         } else {
             setIsPlaying(true); isPlayingRef.current = true;
+            isInterruptedRef.current = false;
             speechSessionIdRef.current++;
             if (heartbeatRef.current) heartbeatRef.current.play().catch(() => { });
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
@@ -301,6 +288,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     // ============================================================
     const jumpTo = useCallback((idx: number, limitWords?: number) => {
         speechSessionIdRef.current++;
+        isInterruptedRef.current = false;
         window.speechSynthesis.cancel();
         const limit = limitWords !== undefined ? limitWords : totalWordsCount;
         const safeIdx = Math.max(0, limit > 0 ? Math.min(idx, limit - 1) : idx);
@@ -383,29 +371,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     }, []);
 
     // ============================================================
-    // BACKGROUND PLAYBACK - DO NOT PAUSE on visibility change
-    // Instead, keep playing and re-acquire wake lock when returning.
-    // The heartbeat audio + Chrome workaround keep speech alive.
-    // ============================================================
-    useEffect(() => {
-        const handleVisibilityChange = async () => {
-            if (document.visibilityState === 'visible') {
-                // Re-acquire wake lock when tab becomes visible again
-                if (isPlayingRef.current) {
-                    await requestWakeLock();
-                }
-            } else if (document.visibilityState === 'hidden') {
-                // Save progress when going to background (but do NOT stop playback)
-                if (isPlayingRef.current) {
-                    saveProgressImmediate();
-                }
-            }
-        };
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-    }, [requestWakeLock, saveProgressImmediate]);
-
-    // ============================================================
     // MEDIA SESSION CONTROLS (lock screen / notification controls)
     // ============================================================
     useEffect(() => {
@@ -428,6 +393,70 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             navigator.mediaSession.setActionHandler('stop', () => { if (isPlayingRef.current) togglePlayback(); });
         }
     }, [activeBook, isPlaying, currentChapter, updateMediaSessionPosition, togglePlayback, jumpTo, skipSentence, skipParagraph]);
+
+    // ============================================================
+    // AUDIO FOCUS & BACKGROUND MANAGEMENT
+    // These hooks depend on speak/togglePlayback so they reside here
+    // ============================================================
+    useEffect(() => {
+        const audio = new Audio();
+        audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+        audio.loop = true;
+        audio.volume = 0.01;
+        audio.preload = "auto";
+        heartbeatRef.current = audio;
+
+        const handleSystemPause = () => {
+            if (isPlayingRef.current) {
+                isInterruptedRef.current = true;
+                window.speechSynthesis.cancel();
+                setIsPlaying(false);
+                isPlayingRef.current = false;
+                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+            }
+        };
+
+        const handleSystemPlay = () => {
+            if (isInterruptedRef.current && activeBook) {
+                isInterruptedRef.current = false;
+                setTimeout(() => {
+                    if (!isPlayingRef.current) {
+                        setIsPlaying(true);
+                        isPlayingRef.current = true;
+                        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+                        speak();
+                    }
+                }, 1000);
+            }
+        };
+
+        audio.addEventListener('pause', handleSystemPause);
+        audio.addEventListener('play', handleSystemPlay);
+
+        return () => {
+            audio.removeEventListener('pause', handleSystemPause);
+            audio.removeEventListener('play', handleSystemPlay);
+            if (heartbeatRef.current) { heartbeatRef.current.pause(); heartbeatRef.current.src = ""; }
+        };
+    }, [activeBook, speak]);
+
+    useEffect(() => {
+        const handleVisibilityChange = async () => {
+            if (document.visibilityState === 'visible') {
+                if (isPlayingRef.current) await requestWakeLock();
+                if (isInterruptedRef.current && activeBook) {
+                    isInterruptedRef.current = false;
+                    setIsPlaying(true);
+                    isPlayingRef.current = true;
+                    speak();
+                }
+            } else if (document.visibilityState === 'hidden' && isPlayingRef.current) {
+                saveProgressImmediate();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [requestWakeLock, saveProgressImmediate, activeBook, speak]);
 
     return {
         isPlaying, currentWordIndex, setCurrentWordIndex,
