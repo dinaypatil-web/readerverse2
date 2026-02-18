@@ -11,7 +11,11 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>(() => localStorage.getItem('reader_voice') || "");
     const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
     const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() => localStorage.getItem('reader_output_device') || "");
-    const [ttsProvider, setTtsProvider] = useState<TtsProvider>(() => (localStorage.getItem('reader_provider') as any) || 'system');
+    const [ttsProvider, setTtsProvider] = useState<TtsProvider>(() => {
+        const saved = localStorage.getItem('reader_provider');
+        if (saved === 'system' || saved === 'gemini') return saved as TtsProvider;
+        return 'system';
+    });
     const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
     const [sleepTimerEnd, setSleepTimerEnd] = useState<number | null>(null);
     const [sleepTimerRemaining, setSleepTimerRemaining] = useState('');
@@ -25,6 +29,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const wakeLockRef = useRef<WakeLockSentinel | null>(null);
     const sleepTimerIntervalRef = useRef<number | null>(null);
     const chromeBgIntervalRef = useRef<number | null>(null);
+    const speakRef = useRef<() => void>(() => { });
 
     // Persist settings
     useEffect(() => localStorage.setItem('reader_speed', playbackSpeed.toString()), [playbackSpeed]);
@@ -241,7 +246,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             wordIdxRef.current = next;
             setCurrentWordIndex(next);
             saveProgressThrottled();
-            setTimeout(() => { if (sId === speechSessionIdRef.current) speak(); }, 50);
+            setTimeout(() => { if (sId === speechSessionIdRef.current) speakRef.current(); }, 50);
         } else {
             setIsPlaying(false); isPlayingRef.current = false;
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
@@ -326,6 +331,8 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         speakWithSystem(text, block, offset, sId);
     }, [activeBook, speakWithSystem, advanceToNextBlock]);
 
+    useEffect(() => { speakRef.current = speak; }, [speak]);
+
 
 
     // ============================================================
@@ -343,6 +350,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             saveProgressImmediate();
             releaseWakeLock();
         } else {
+            setIsPlaying(true); isPlayingRef.current = true;
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
             requestWakeLock();
             if (ttsProvider === 'system') startChromeBgWorkaround();
@@ -384,7 +392,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             }
         }
 
-        if (isPlayingRef.current) setTimeout(speak, 50);
+        if (isPlayingRef.current) setTimeout(() => speakRef.current(), 50);
     }, [totalWordsCount, speak, activeBook, updateMediaSessionPosition, saveProgressThrottled, setCurrentWordIndex]);
 
     // ============================================================
@@ -491,7 +499,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                         setIsPlaying(true);
                         isPlayingRef.current = true;
                         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-                        speak();
+                        speakRef.current();
                     }
                 }, 1000);
             }
@@ -515,7 +523,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                     isInterruptedRef.current = false;
                     setIsPlaying(true);
                     isPlayingRef.current = true;
-                    speak();
+                    speakRef.current();
                 }
             } else if (document.visibilityState === 'hidden' && isPlayingRef.current) {
                 saveProgressImmediate();
