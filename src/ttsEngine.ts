@@ -25,6 +25,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const wordIdxRef = useRef(0);
     const speechSessionIdRef = useRef(0);
     const heartbeatRef = useRef<HTMLAudioElement | null>(null);
+    const audioContextRef = useRef<AudioContext | null>(null);
     const lastSavedIndexRef = useRef(0);
     const wakeLockRef = useRef<WakeLockSentinel | null>(null);
     const sleepTimerIntervalRef = useRef<number | null>(null);
@@ -366,6 +367,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             saveProgressImmediate();
             releaseWakeLock();
         } else {
+            if (audioContextRef.current) audioContextRef.current.resume().catch(() => { });
             setIsPlaying(true); isPlayingRef.current = true;
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
             requestWakeLock();
@@ -409,7 +411,10 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             }
         }
 
-        if (isPlayingRef.current) setTimeout(() => speakRef.current(), 50);
+        if (isPlayingRef.current) {
+            if (audioContextRef.current) audioContextRef.current.resume().catch(() => { });
+            setTimeout(() => speakRef.current(), 50);
+        }
     }, [totalWordsCount, speak, activeBook, updateMediaSessionPosition, saveProgressThrottled, setCurrentWordIndex]);
 
     // ============================================================
@@ -522,12 +527,35 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             }
         };
 
+        // AudioContext helps detect mobile-specific interruptions (like calls/alarms)
+        try {
+            const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+            if (AudioCtx) {
+                const ctx = new AudioCtx();
+                audioContextRef.current = ctx;
+
+                ctx.onstatechange = () => {
+                    if (ctx.state === 'suspended' && isPlayingRef.current) {
+                        handleSystemPause();
+                    } else if (ctx.state === 'running' && isInterruptedRef.current) {
+                        handleSystemPlay();
+                    }
+                };
+            }
+        } catch (e) {
+            console.warn("AudioContext not supported for interruption monitoring");
+        }
+
         audio.addEventListener('pause', handleSystemPause);
         audio.addEventListener('play', handleSystemPlay);
 
         return () => {
             audio.removeEventListener('pause', handleSystemPause);
             audio.removeEventListener('play', handleSystemPlay);
+            if (audioContextRef.current) {
+                audioContextRef.current.close().catch(() => { });
+                audioContextRef.current = null;
+            }
             if (heartbeatRef.current) { heartbeatRef.current.pause(); heartbeatRef.current.src = ""; }
         };
     }, [activeBook, speak]);
