@@ -7,13 +7,16 @@ interface WordBlockProps {
     onWordClick: (idx: number) => void;
     fontSize: number;
     activeWordRef: React.RefObject<HTMLSpanElement | null>;
+    bookType?: string;
 }
 
-export const WordBlock = memo(({ block, currentWordIndex, onWordClick, fontSize, activeWordRef }: WordBlockProps) => {
+export const WordBlock = memo(({ block, currentWordIndex, onWordClick, fontSize, activeWordRef, bookType }: WordBlockProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const elementsCache = useRef<Map<number, HTMLSpanElement>>(new Map());
 
     useEffect(() => {
+        if (bookType === 'pdf') return; // Disable word-level updates for PDFs for performance
+
         const handleWordUpdate = (e: Event) => {
             const detail = (e as CustomEvent).detail;
             const { index, prevIndex } = detail;
@@ -47,13 +50,15 @@ export const WordBlock = memo(({ block, currentWordIndex, onWordClick, fontSize,
 
         window.addEventListener('word-index-update', handleWordUpdate);
         return () => window.removeEventListener('word-index-update', handleWordUpdate);
-    }, [block.wordStartIndex, block.wordCount, activeWordRef]);
+    }, [block.wordStartIndex, block.wordCount, activeWordRef, bookType]);
 
     return (
         <div ref={containerRef} className="reader-text leading-[1.8] text-left mb-12" style={{ fontSize: `${fontSize}px` }}>
             {block.words.map((word, wIdx) => {
                 const globalIdx = block.wordStartIndex + wIdx;
                 const isCurrent = currentWordIndex === globalIdx;
+                const disableHighlight = bookType === 'pdf';
+
                 return (
                     <span
                         key={wIdx}
@@ -63,9 +68,10 @@ export const WordBlock = memo(({ block, currentWordIndex, onWordClick, fontSize,
                         }}
                         data-idx={globalIdx}
                         onClick={() => onWordClick(globalIdx)}
-                        className={`word-highlight relative inline-block mr-[0.28em] px-1.5 py-0.5 rounded-lg cursor-pointer select-none touch-manipulation ${isCurrent
-                            ? 'word-active'
-                            : 'opacity-70 hover:opacity-100 dark:text-zinc-300'
+                        className={`relative inline-block mr-[0.28em] px-1.5 py-0.5 rounded-lg cursor-pointer select-none touch-manipulation ${!disableHighlight ? 'word-highlight' : ''
+                            } ${isCurrent && !disableHighlight
+                                ? 'word-active'
+                                : 'opacity-70 hover:opacity-100 dark:text-zinc-300'
                             }`}
                     >
                         {word}

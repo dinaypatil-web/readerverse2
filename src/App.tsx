@@ -235,7 +235,8 @@ const App = () => {
                             <article className="max-w-2xl mx-auto space-y-16 pb-[450px]">
                                 {visibleBlocks.map(b => (
                                     <WordBlock key={b.wordStartIndex} block={b} currentWordIndex={tts.currentWordIndex}
-                                        onWordClick={tts.jumpTo} fontSize={fontSize} activeWordRef={activeWordRef} />
+                                        onWordClick={tts.jumpTo} fontSize={fontSize} activeWordRef={activeWordRef}
+                                        bookType={activeBook?.type} />
                                 ))}
                             </article>
                         </div>
