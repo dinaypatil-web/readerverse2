@@ -140,15 +140,19 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     }, [isPlaying, activeBook, saveProgressImmediate]);
 
     // ============================================================
-    // MEDIA SESSION POSITION
+    // MEDIA SESSION POSITION & DURATION
+    // Mapping word index to approximate "seconds" (approx 3 words per second)
     // ============================================================
+    const WORDS_PER_SECOND = 3;
     const updateMediaSessionPosition = useCallback(() => {
         if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
             try {
+                const totalDuration = totalWordsCount / WORDS_PER_SECOND;
+                const currentPos = wordIdxRef.current / WORDS_PER_SECOND;
                 navigator.mediaSession.setPositionState({
-                    duration: Math.max(totalWordsCount, 1),
+                    duration: Math.max(totalDuration, 1),
                     playbackRate: playbackSpeed,
-                    position: Math.min(wordIdxRef.current, totalWordsCount)
+                    position: Math.min(currentPos, totalDuration)
                 });
             } catch { /* silent */ }
         }
@@ -385,14 +389,14 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             updateMediaSessionPosition();
             navigator.mediaSession.setActionHandler('play', togglePlayback);
             navigator.mediaSession.setActionHandler('pause', togglePlayback);
-            navigator.mediaSession.setActionHandler('seekto', (d) => { if (d.seekTime !== undefined) jumpTo(Math.floor(d.seekTime)); });
+            navigator.mediaSession.setActionHandler('seekto', (d) => { if (d.seekTime !== undefined) jumpTo(Math.floor(d.seekTime * WORDS_PER_SECOND)); });
             navigator.mediaSession.setActionHandler('seekbackward', () => skipSentence(-1));
             navigator.mediaSession.setActionHandler('seekforward', () => skipSentence(1));
             navigator.mediaSession.setActionHandler('previoustrack', () => skipParagraph(-1));
             navigator.mediaSession.setActionHandler('nexttrack', () => skipParagraph(1));
             navigator.mediaSession.setActionHandler('stop', () => { if (isPlayingRef.current) togglePlayback(); });
         }
-    }, [activeBook, isPlaying, currentChapter, updateMediaSessionPosition, togglePlayback, jumpTo, skipSentence, skipParagraph]);
+    }, [activeBook, isPlaying, currentChapter, updateMediaSessionPosition, togglePlayback, jumpTo, skipSentence, skipParagraph, WORDS_PER_SECOND]);
 
     // ============================================================
     // AUDIO FOCUS & BACKGROUND MANAGEMENT
