@@ -245,11 +245,11 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                 updateMediaSessionPosition();
 
                 // 3. Throttle React state updates to avoid sluggishness
-                // Update state only if we changed blocks, or every ~10 words
+                // Update state only if we changed blocks, or every 5 words (down from 10) for slightly better feedback
                 const prevBlockIdx = findBlockIdx(prevIdx, activeBook.displayBlocks);
                 const currentBlockIdx = findBlockIdx(global, activeBook.displayBlocks);
 
-                if (prevBlockIdx !== currentBlockIdx || global % 10 === 0) {
+                if (prevBlockIdx !== currentBlockIdx || global % 5 === 0) {
                     setCurrentWordIndex(global);
                     saveProgressThrottled();
                 }

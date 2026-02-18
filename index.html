@@ -65,15 +65,14 @@
 
         /* Premium Word Highlight - Optimized for Performance */
         .word-highlight {
-            transition: background-color 0.1s ease, transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), color 0.1s ease;
+            transition: background-color 0.1s ease, color 0.1s ease;
             transform-origin: center;
-            will-change: transform;
         }
 
         .word-active {
             background: var(--active-grad);
             color: white !important;
-            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--accent-glow);
             z-index: 20;
             border-radius: 0.5rem;
         }

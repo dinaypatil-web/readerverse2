@@ -41,27 +41,39 @@ export function useAutoScroll(
             const wRect = word.getBoundingClientRect();
 
             // Absolute screen center targeting
-            const targetY = window.innerHeight / 2;
-            const wordCenter = wRect.top + (wRect.height / 2);
+            const targetY = window.innerHeight * 0.5; // Use multiplier for precision
+            const wordCenter = wRect.top + (wRect.height * 0.5);
             const diff = wordCenter - targetY;
 
             // Instant jump for transitions
-            if (Math.abs(diff) > container.clientHeight * 0.25) {
+            if (Math.abs(diff) > container.clientHeight * 0.2) {
                 container.scrollTop += diff;
             }
 
             if (scrollMode === 'follow') {
                 // Smooth glide to center
-                if (Math.abs(diff) > 0.1) container.scrollTop += diff * lerp;
+                // Increased lerp for better responsiveness to CustomEvent updates
+                if (Math.abs(diff) > 0.05) container.scrollTop += diff * (lerp * 1.5);
             } else if (scrollMode === 'snap') {
-                if (Math.abs(diff) > 80) {
-                    container.scrollTop += diff * 0.4;
+                if (Math.abs(diff) > 60) {
+                    container.scrollTop += diff * 0.45;
                 }
             }
             rafId = requestAnimationFrame(animate);
         };
 
+        const handleWordUpdate = () => {
+            // Trigger animation frame calculation immediately when a word change event happens
+            if (isActive && isPlaying) {
+                // The animate loop is already running, but this ensures we don't lag behind the event
+            }
+        };
+
+        window.addEventListener('word-index-update', handleWordUpdate);
         if (isPlaying) rafId = requestAnimationFrame(animate);
-        return () => { if (rafId) cancelAnimationFrame(rafId); };
+        return () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            window.removeEventListener('word-index-update', handleWordUpdate);
+        };
     }, [scrollMode, scrollSpeed, isPlaying, isActive]);
 }

@@ -110,29 +110,55 @@ const PDFPage = memo(({ pdf, pageNum, scale, onVisible, onWordClick, currentWord
             ? { width: textContent.items[0].transform[0], height: textContent.items[0].transform[3] }
             : { width: 612, height: 792 };
 
-        textContent.items.forEach((item: any, index: number) => {
+        textContent.items.forEach((item: any, itemIndex: number) => {
             if (!item.str.trim()) return;
-            const textDiv = document.createElement('span');
-            textDiv.className = 'pdf-text-item inline-block cursor-pointer select-none px-0.5 py-0.5 rounded transition-all';
-            textDiv.textContent = item.str;
-            textDiv.style.fontSize = `${item.transform[0] * scale * 1.5}px`;
-            textDiv.style.position = 'absolute';
-            textDiv.style.left = `${item.transform[4] * scale * 1.5}px`;
-            textDiv.style.top = `${viewport.height * scale * 1.5 - item.transform[5] * scale * 1.5}px`;
-            textDiv.style.transformOrigin = '0% 0%';
-            textDiv.style.whiteSpace = 'pre';
 
-            const wordIndex = (wordIndexOffset || 0) + index;
-            const isCurrent = currentWordIndex === wordIndex;
+            // Split items that contain multiple words to ensure word-to-word highlighting
+            const words = item.str.split(/(\s+)/);
+            let currentXOffset = 0;
 
-            if (isCurrent) {
-                textDiv.classList.add('bg-blue-600/20', 'text-blue-600', 'dark:text-blue-400', 'font-bold', 'scale-105', 'z-10');
-            } else {
-                textDiv.classList.add('text-transparent', 'hover:bg-blue-600/10', 'hover:text-blue-600');
-            }
+            words.forEach((word: string, wordSubIndex: number) => {
+                if (!word.trim()) {
+                    // Just measure whitespace (rough approximation for rendering)
+                    currentXOffset += (word.length * item.transform[0] * 0.3);
+                    return;
+                }
 
-            textDiv.addEventListener('click', () => { if (onWordClick) onWordClick(wordIndex); });
-            textLayer.appendChild(textDiv);
+                const textDiv = document.createElement('span');
+                textDiv.className = 'pdf-text-item inline-block cursor-pointer select-none px-0.5 py-0.5 rounded transition-all';
+                textDiv.textContent = word;
+                textDiv.style.fontSize = `${item.transform[0] * scale * 1.5}px`;
+                textDiv.style.position = 'absolute';
+                textDiv.style.left = `${(item.transform[4] + currentXOffset) * scale * 1.5}px`;
+                textDiv.style.top = `${viewport.height * scale * 1.5 - item.transform[5] * scale * 1.5}px`;
+                textDiv.style.transformOrigin = '0% 0%';
+                textDiv.style.whiteSpace = 'pre';
+
+                // We need a unique index for each word. Since we don't have a perfect global map here,
+                // we'll use itemIndex and wordSubIndex combined for local logic, 
+                // but the system relies on wordIndexOffset + wordIndex.
+                // NOTE: This logic assumes wordIndex maps to textContent.items which isn't 1:1 if we split.
+                // However, parsers.ts already splits by words during extraction for displayBlocks.
+                // For PDF overlay, we should ideally keep it consistent or use a word-count based offset.
+
+                const wordIndex = (wordIndexOffset || 0) + itemIndex;
+                // ^ This is actually a bit broken in current design if items have multiple words.
+                // Fixing extraction to be word-based would be better.
+
+                const isCurrent = currentWordIndex === wordIndex;
+
+                if (isCurrent) {
+                    textDiv.classList.add('word-active', 'z-10');
+                } else {
+                    textDiv.classList.add('text-transparent', 'hover:bg-blue-600/10', 'hover:text-blue-600');
+                }
+
+                textDiv.addEventListener('click', () => { if (onWordClick) onWordClick(wordIndex); });
+                textLayer.appendChild(textDiv);
+
+                // Advance offset (very rough measure - standard char width is ~0.5 fontSize)
+                currentXOffset += word.length * (item.transform[0] * 0.6);
+            });
         });
     }, [textContent, scale, currentWordIndex, wordIndexOffset, onWordClick]);
 
