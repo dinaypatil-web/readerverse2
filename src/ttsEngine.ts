@@ -118,6 +118,28 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         };
     }, [selectedVoiceURI]);
 
+    // Auto-Select Voice based on Book Language
+    useEffect(() => {
+        if (!activeBook || availableVoices.length === 0) return;
+
+        const bookLang = activeBook.language || 'en';
+        const currentVoice = availableVoices.find(v => v.voiceURI === selectedVoiceURI);
+
+        // If current voice is missing or doesn't match the book language, try to switch
+        const isLangMatch = currentVoice && currentVoice.lang.toLowerCase().startsWith(bookLang.toLowerCase());
+
+        if (!isLangMatch) {
+            // Find best voice for this language: Natural/Premium > matches lang > system default
+            const match = availableVoices.find(v => v.lang.toLowerCase().startsWith(bookLang.toLowerCase()) && (v.name.includes('Natural') || v.name.includes('Premium')))
+                || availableVoices.find(v => v.lang.toLowerCase().startsWith(bookLang.toLowerCase()))
+                || availableVoices.find(v => v.default);
+
+            if (match && match.voiceURI !== selectedVoiceURI) {
+                setSelectedVoiceURI(match.voiceURI);
+            }
+        }
+    }, [activeBook, availableVoices, selectedVoiceURI]);
+
     // Apply audio output device (sinkId)
     useEffect(() => {
         if (heartbeatRef.current && selectedDeviceId && 'setSinkId' in (heartbeatRef.current as any)) {
@@ -242,7 +264,10 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         window.speechSynthesis.cancel();
         const utt = new SpeechSynthesisUtterance(text);
         const v = availableVoices.find(x => x.voiceURI === selectedVoiceURI) || availableVoices.find(v => v.default) || availableVoices[0];
-        if (v) utt.voice = v;
+        if (v) {
+            utt.voice = v;
+            utt.lang = v.lang; // Explicitly set lang for better engine compatibility
+        }
         utt.rate = playbackSpeed;
         utt.onboundary = (e) => {
             if (sId !== speechSessionIdRef.current || e.name !== 'word') return;
@@ -361,10 +386,10 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         const allWords = activeBook.displayBlocks.flatMap(b => b.words);
         let idx = wordIdxRef.current;
         if (direction === 1) {
-            while (idx < allWords.length - 1) { idx++; if (/[.!?]$/.test(allWords[idx - 1] || '')) break; }
+            while (idx < allWords.length - 1) { idx++; if (/[.!?।]$/.test(allWords[idx - 1] || '')) break; }
         } else {
             idx = Math.max(0, idx - 2);
-            while (idx > 0) { idx--; if (/[.!?]$/.test(allWords[idx] || '')) { idx++; break; } }
+            while (idx > 0) { idx--; if (/[.!?।]$/.test(allWords[idx] || '')) { idx++; break; } }
         }
         jumpTo(Math.max(0, Math.min(idx, totalWordsCount - 1)));
     }, [activeBook, jumpTo, totalWordsCount]);

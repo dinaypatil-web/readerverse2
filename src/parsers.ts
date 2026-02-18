@@ -39,8 +39,32 @@ function buildBlocks(contentStr: string, startOffset: number = 0): { blocks: Tex
     return { blocks, totalWords: count };
 }
 
+// --- Language Detection Helper ---
+export function detectLanguage(text: string, metadataLang?: string): string {
+    if (metadataLang && metadataLang.length >= 2) return metadataLang.split('-')[0].split('_')[0].toLowerCase();
+
+    // Sample text for script detection
+    const sample = text.slice(0, 2000);
+    const scripts = [
+        { name: 'hi', range: /[\u0900-\u097F]/ }, // Devanagari (Hindi, Marathi, etc.)
+        { name: 'bn', range: /[\u0980-\u09FF]/ }, // Bengali
+        { name: 'ta', range: /[\u0B80-\u0BFF]/ }, // Tamil
+        { name: 'te', range: /[\u0C00-\u0C7F]/ }, // Telugu
+        { name: 'kn', range: /[\u0C80-\u0CFF]/ }, // Kannada
+        { name: 'ml', range: /[\u0D00-\u0D7F]/ }, // Malayalam
+        { name: 'gu', range: /[\u0A80-\u0AFF]/ }, // Gujarati
+        { name: 'pa', range: /[\u0A00-\u0A7F]/ }, // Gurmukhi (Punjabi)
+    ];
+
+    for (const s of scripts) {
+        if (s.range.test(sample)) return s.name;
+    }
+
+    return 'en';
+}
+
 // --- EPUB Parser ---
-export async function extractEpub(buffer: ArrayBuffer, onStatus: (s: string) => void): Promise<{ displayBlocks: TextBlock[]; chapters: ChapterEntry[]; metadata: any }> {
+export async function extractEpub(buffer: ArrayBuffer, onStatus: (s: string) => void): Promise<{ displayBlocks: TextBlock[]; chapters: ChapterEntry[]; metadata: any; language: string }> {
     const book = e(buffer);
     onStatus("Reading EPUB...");
     await book.opened;
@@ -117,11 +141,15 @@ export async function extractEpub(buffer: ArrayBuffer, onStatus: (s: string) => 
     const sorted = chapters.sort((a, b) => a.startIndex - b.startIndex);
     const deduped = sorted.filter((c, i, arr) => i === 0 || c.startIndex !== arr[i - 1].startIndex);
 
-    return { displayBlocks, chapters: deduped, metadata };
+    // Initial detection from metadata, fallback to text scan
+    const sampleText = displayBlocks.slice(0, 5).map(b => b.words.join(' ')).join(' ');
+    const language = detectLanguage(sampleText, metadata?.language);
+
+    return { displayBlocks, chapters: deduped, metadata, language };
 }
 
 // --- PDF Parser (Batch-Concurrent) ---
-export async function extractPdf(buffer: ArrayBuffer, onStatus: (s: string) => void): Promise<{ displayBlocks: TextBlock[]; chapters: ChapterEntry[]; metadata: any }> {
+export async function extractPdf(buffer: ArrayBuffer, onStatus: (s: string) => void): Promise<{ displayBlocks: TextBlock[]; chapters: ChapterEntry[]; metadata: any; language: string }> {
     onStatus("Loading PDF...");
     const bufferCopy = safeCloneArrayBuffer(buffer);
     let pdf;
@@ -335,11 +363,15 @@ export async function extractPdf(buffer: ArrayBuffer, onStatus: (s: string) => v
 
     let metadata: any = {};
     try { metadata = await pdf.getMetadata(); } catch { }
-    return { displayBlocks, chapters, metadata };
+
+    const sampleText = displayBlocks.slice(0, 3).map(b => b.words.join(' ')).join(' ');
+    const language = detectLanguage(sampleText, metadata?.info?.Language);
+
+    return { displayBlocks, chapters, metadata, language };
 }
 
 // --- DOCX Parser ---
-export async function extractDocx(buffer: ArrayBuffer, onStatus: (s: string) => void): Promise<{ displayBlocks: TextBlock[]; chapters: ChapterEntry[]; metadata: any }> {
+export async function extractDocx(buffer: ArrayBuffer, onStatus: (s: string) => void): Promise<{ displayBlocks: TextBlock[]; chapters: ChapterEntry[]; metadata: any; language: string }> {
     onStatus("Converting DOCX...");
     const mammoth = (window as any).mammoth;
     if (!mammoth) throw new Error("DOCX support library not loaded. Please refresh and try again.");
@@ -368,11 +400,13 @@ export async function extractDocx(buffer: ArrayBuffer, onStatus: (s: string) => 
             totalWordCount += words.length;
         }
     }
-    return { displayBlocks, chapters: chapters.sort((a, b) => a.startIndex - b.startIndex), metadata: { title: 'Document' } };
+    const sampleText = displayBlocks.slice(0, 3).map(b => b.words.join(' ')).join(' ');
+    const language = detectLanguage(sampleText);
+    return { displayBlocks, chapters: chapters.sort((a, b) => a.startIndex - b.startIndex), metadata: { title: 'Document' }, language };
 }
 
 // --- Text Parser ---
-export function extractText(text: string, filename: string): { displayBlocks: TextBlock[]; chapters: ChapterEntry[]; metadata: any } {
+export function extractText(text: string, filename: string): { displayBlocks: TextBlock[]; chapters: ChapterEntry[]; metadata: any; language: string } {
     const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 0);
     const displayBlocks: TextBlock[] = [];
     let totalWords = 0;
@@ -383,7 +417,8 @@ export function extractText(text: string, filename: string): { displayBlocks: Te
             totalWords += words.length;
         }
     }
-    return { displayBlocks, chapters: [], metadata: { title: filename } };
+    const language = detectLanguage(text);
+    return { displayBlocks, chapters: [], metadata: { title: filename }, language };
 }
 
 // --- Utility: Find Block Index by Word Position ---

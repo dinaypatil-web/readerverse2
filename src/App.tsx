@@ -95,7 +95,8 @@ const App = () => {
                 bookmarks: [],
                 type: (ext as any) || 'txt',
                 fileData: ext === 'pdf' ? buffer : undefined,
-                lastIndex: 0
+                lastIndex: 0,
+                language: res.language
             };
             await saveBookToDB(b);
             setBooks(p => [...p, b]); setActiveBook(b); tts.jumpTo(0); setView('reader');

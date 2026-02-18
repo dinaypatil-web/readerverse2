@@ -38,4 +38,5 @@ export interface Book {
     lastTtsSpeed?: number;
     lastVoiceURI?: string;
     lastScrollMode?: ScrollMode;
+    language?: string;
 }
