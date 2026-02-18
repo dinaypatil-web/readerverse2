@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, memo } from 'react';
 import {
     Play, Pause, SkipForward, SkipBack, Bookmark,
-    ChevronUp, ChevronDown, Eye, Crosshair, Hand, Clock
+    ChevronUp, ChevronDown, Eye, Crosshair, Hand, Clock, Loader2
 } from 'lucide-react';
 import { ScrollMode, ScrollSpeed, ChapterEntry, Book } from '../types';
 
@@ -30,6 +30,7 @@ interface FloatingControlsProps {
     currentChapter: ChapterEntry | null;
     wordIdxRef: React.RefObject<number>;
     openSettings: () => void;
+    isBuffering: boolean;
 }
 
 export const FloatingControls: React.FC<FloatingControlsProps> = memo(({
@@ -40,7 +41,8 @@ export const FloatingControls: React.FC<FloatingControlsProps> = memo(({
     togglePlayback, jumpTo, skipSentence, skipParagraph,
     addBookmark,
     sleepTimerMinutes, sleepTimerEnd, sleepTimerRemaining, setSleepTimer,
-    activeBook, currentChapter, wordIdxRef, openSettings
+    activeBook, currentChapter, wordIdxRef, openSettings,
+    isBuffering
 }) => {
     const progressBarRef = useRef<HTMLDivElement>(null);
 
@@ -197,7 +199,7 @@ export const FloatingControls: React.FC<FloatingControlsProps> = memo(({
                         </button>
                         <button onClick={togglePlayback}
                             className={`w-14 h-14 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all hover:bg-blue-500 ${isPlaying ? 'animate-pulse-glow' : ''}`}>
-                            {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-0.5" />}
+                            {isBuffering ? <Loader2 size={24} className="animate-spin" /> : (isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-0.5" />)}
                         </button>
                         <button onClick={() => skipSentence(1)}
                             className="w-10 h-10 flex items-center justify-center rounded-full opacity-40 hover:opacity-100 active:scale-90 transition-all">

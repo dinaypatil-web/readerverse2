@@ -23,6 +23,11 @@ interface SettingsPanelProps {
     setScrollMode: (v: ScrollMode) => void;
     scrollSpeed: ScrollSpeed;
     setScrollSpeed: (v: ScrollSpeed) => void;
+    openaiApiKey: string;
+    setOpenaiApiKey: (v: string) => void;
+    openaiVoice: string;
+    setOpenaiVoice: (v: string) => void;
+    isBuffering: boolean;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -34,6 +39,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     theme, setTheme,
     playbackSpeed, setPlaybackSpeed,
     scrollMode, setScrollMode, scrollSpeed, setScrollSpeed,
+    openaiApiKey, setOpenaiApiKey,
+    openaiVoice, setOpenaiVoice,
+    isBuffering,
 }) => {
     if (!isOpen) return null;
 
@@ -50,19 +58,45 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     {/* TTS Provider */}
                     <div className="space-y-6">
                         <span className="text-[11px] font-black opacity-30 uppercase tracking-widest block">Neural Provider</span>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                             <button onClick={() => setTtsProvider('system')}
                                 className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all ${ttsProvider === 'system' ? 'border-blue-600 bg-blue-600 text-white shadow-xl' : 'border-zinc-500/5 bg-zinc-500/5 opacity-40'}`}>
                                 <Globe size={24} />
                                 <span className="text-xs font-black uppercase">System</span>
                             </button>
+                            <button onClick={() => setTtsProvider('openai')}
+                                className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all ${ttsProvider === 'openai' ? 'border-blue-600 bg-blue-600 text-white shadow-xl' : 'border-zinc-500/5 bg-zinc-500/5 opacity-40'}`}>
+                                <Volume2 size={24} />
+                                <span className="text-xs font-black uppercase tracking-tighter">OpenAI</span>
+                            </button>
                             <button onClick={() => setTtsProvider('gemini')}
                                 className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all ${ttsProvider === 'gemini' ? 'border-blue-600 bg-blue-600 text-white shadow-xl' : 'border-zinc-500/5 bg-zinc-500/5 opacity-40'}`}>
                                 <Volume2 size={24} />
-                                <span className="text-xs font-black uppercase tracking-tighter">Neural AI</span>
+                                <span className="text-xs font-black uppercase tracking-tighter">Gemini</span>
                             </button>
                         </div>
                     </div>
+
+                    {/* OpenAI Settings */}
+                    {ttsProvider === 'openai' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="space-y-4">
+                                <span className="text-[11px] font-black opacity-30 uppercase tracking-widest block">OpenAI API Key</span>
+                                <input type="password" value={openaiApiKey} onChange={e => setOpenaiApiKey(e.target.value)}
+                                    placeholder="sk-..."
+                                    className="w-full p-4 rounded-2xl bg-zinc-500/5 border-2 border-transparent focus:border-blue-600 outline-none font-bold dark:text-white transition-all shadow-inner" />
+                            </div>
+                            <div className="space-y-4">
+                                <span className="text-[11px] font-black opacity-30 uppercase tracking-widest block">OpenAI Voice</span>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].map(v => (
+                                        <button key={v} onClick={() => setOpenaiVoice(v)}
+                                            className={`py-3 rounded-xl text-[10px] font-black capitalize transition-all ${openaiVoice === v ? 'bg-blue-600 text-white shadow-lg' : 'bg-zinc-500/5 opacity-40'}`}>{v}</button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Voice Selector */}
                     {ttsProvider === 'system' && (
