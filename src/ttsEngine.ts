@@ -315,7 +315,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         };
         utt.onstart = () => {
             if (sId === speechSessionIdRef.current) {
-                if (heartbeatRef.current) heartbeatRef.current.play().catch(() => { });
                 if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
                 requestWakeLock();
                 startChromeBgWorkaround();
@@ -368,6 +367,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             releaseWakeLock();
         } else {
             if (audioContextRef.current) audioContextRef.current.resume().catch(() => { });
+            if (heartbeatRef.current) heartbeatRef.current.play().catch(() => { });
             setIsPlaying(true); isPlayingRef.current = true;
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
             requestWakeLock();
@@ -413,6 +413,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
 
         if (isPlayingRef.current) {
             if (audioContextRef.current) audioContextRef.current.resume().catch(() => { });
+            if (heartbeatRef.current) heartbeatRef.current.play().catch(() => { });
             setTimeout(() => speakRef.current(), 50);
         }
     }, [totalWordsCount, speak, activeBook, updateMediaSessionPosition, saveProgressThrottled, setCurrentWordIndex]);
