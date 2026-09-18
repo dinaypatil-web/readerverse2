@@ -13,37 +13,39 @@ interface WordBlockProps {
 export const WordBlock = memo(({ block, currentWordIndex, onWordClick, fontSize, activeWordRef, bookType }: WordBlockProps) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const elementsCache = useRef<Map<number, HTMLSpanElement>>(new Map());
+    const currentlyActiveSpanRef = useRef<HTMLSpanElement | null>(null);
 
     useEffect(() => {
         const handleWordUpdate = (e: Event) => {
             const detail = (e as CustomEvent).detail;
-            const { index, prevIndex } = detail;
+            const { index } = detail;
 
-            const isPrevIn = prevIndex >= block.wordStartIndex && prevIndex < block.wordStartIndex + block.wordCount;
             const isCurrentIn = index >= block.wordStartIndex && index < block.wordStartIndex + block.wordCount;
-
-            if (!isPrevIn && !isCurrentIn) return;
-
             const activeClass = bookType === 'pdf' ? 'word-active-pdf' : 'word-active';
 
-            // Remove previous active class
-            if (isPrevIn) {
-                const prevEl = elementsCache.current.get(prevIndex);
-                if (prevEl) {
-                    prevEl.classList.remove('word-active', 'word-active-pdf');
-                    prevEl.classList.add('opacity-70', 'dark:text-zinc-300');
+            if (!isCurrentIn) {
+                // If this block held an active highlight, clean it up completely
+                if (currentlyActiveSpanRef.current) {
+                    currentlyActiveSpanRef.current.classList.remove('word-active', 'word-active-pdf');
+                    currentlyActiveSpanRef.current.classList.add('opacity-70', 'dark:text-zinc-300');
+                    currentlyActiveSpanRef.current = null;
                 }
+                return;
             }
 
-            // Add new active class
-            if (isCurrentIn) {
-                const currentEl = elementsCache.current.get(index);
-                if (currentEl) {
-                    currentEl.classList.add(activeClass);
-                    currentEl.classList.remove('opacity-70', 'dark:text-zinc-300');
-                    if (activeWordRef) {
-                        (activeWordRef as any).current = currentEl;
-                    }
+            // Target word belongs to this block
+            const targetEl = elementsCache.current.get(index);
+            if (currentlyActiveSpanRef.current && currentlyActiveSpanRef.current !== targetEl) {
+                currentlyActiveSpanRef.current.classList.remove('word-active', 'word-active-pdf');
+                currentlyActiveSpanRef.current.classList.add('opacity-70', 'dark:text-zinc-300');
+            }
+
+            if (targetEl) {
+                targetEl.classList.add(activeClass);
+                targetEl.classList.remove('opacity-70', 'dark:text-zinc-300');
+                currentlyActiveSpanRef.current = targetEl;
+                if (activeWordRef) {
+                    (activeWordRef as any).current = targetEl;
                 }
             }
         };
@@ -64,12 +66,16 @@ export const WordBlock = memo(({ block, currentWordIndex, onWordClick, fontSize,
                     <span
                         key={wIdx}
                         ref={(el) => {
-                            if (el) elementsCache.current.set(globalIdx, el);
-                            else elementsCache.current.delete(globalIdx);
+                            if (el) {
+                                elementsCache.current.set(globalIdx, el);
+                                if (isCurrent) currentlyActiveSpanRef.current = el;
+                            } else {
+                                elementsCache.current.delete(globalIdx);
+                            }
                         }}
                         data-idx={globalIdx}
                         onClick={() => onWordClick(globalIdx)}
-                        className={`relative inline-block mr-[0.28em] px-1.5 py-0.5 rounded-lg cursor-pointer select-none touch-manipulation ${!isPdf ? 'word-highlight' : ''
+                        className={`relative inline-block mr-[0.28em] px-1.5 py-0.5 rounded-lg cursor-pointer select-none touch-manipulation transition-colors duration-100 ${!isPdf ? 'word-highlight' : ''
                             } ${isCurrent
                                 ? activeClass
                                 : 'opacity-70 hover:opacity-100 dark:text-zinc-300'

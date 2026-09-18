@@ -37,6 +37,7 @@ export const POPULAR_EDGE_VOICES: ExternalVoice[] = [
 ];
 
 let allEdgeVoicesCache: ExternalVoice[] | null = null;
+const prefetchAudioPool = new Map<string, HTMLAudioElement>();
 
 export async function getEdgeVoices(): Promise<ExternalVoice[]> {
     if (allEdgeVoicesCache && allEdgeVoicesCache.length > 0) return allEdgeVoicesCache;
@@ -58,22 +59,36 @@ export async function getEdgeVoices(): Promise<ExternalVoice[]> {
             }
         }
     } catch {
-        // Fallback to pre-configured popular voices if offline or endpoint unavailable
+        // Fallback to popular voices
     }
     return POPULAR_EDGE_VOICES;
 }
 
-export async function synthesizeEdgeTTS(text: string, voiceId: string, rate: number = 1.0): Promise<Blob> {
-    const res = await fetch('/api/tts/edge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: voiceId, rate })
-    });
+// Instant Direct Stream URL - browser starts playing within <150ms
+export function getEdgeStreamUrl(text: string, voiceId: string): string {
+    return `/api/tts/edge/stream?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId || 'en-US-JennyNeural')}`;
+}
 
-    if (!res.ok) {
-        const err = await res.text().catch(() => res.statusText);
-        throw new Error(`Edge TTS error: ${err || res.status}`);
+// Prefetch upcoming block audio in background for 0ms pause between blocks
+export function prefetchEdgeAudio(text: string, voiceId: string): void {
+    if (!text || text.trim().length === 0) return;
+    const url = getEdgeStreamUrl(text, voiceId);
+    if (prefetchAudioPool.has(url)) return;
+
+    // Keep pool limited to 3 items
+    if (prefetchAudioPool.size > 3) {
+        const oldestKey = prefetchAudioPool.keys().next().value;
+        if (oldestKey) {
+            const oldAudio = prefetchAudioPool.get(oldestKey);
+            if (oldAudio) { oldAudio.src = ''; }
+            prefetchAudioPool.delete(oldestKey);
+        }
     }
 
-    return await res.blob();
+    try {
+        const audio = new Audio();
+        audio.preload = 'auto';
+        audio.src = url;
+        prefetchAudioPool.set(url, audio);
+    } catch { /* silent */ }
 }

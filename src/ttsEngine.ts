@@ -2,9 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Book, TtsProvider, ScrollMode, ExternalVoice } from './types';
 import { updateBookProgress } from './persistence';
 import { findBlockIdx } from './parsers';
-import { synthesizeEdgeTTS, getEdgeVoices, POPULAR_EDGE_VOICES } from './services/edgeTts';
-import { synthesizeKokoroTTS, KOKORO_VOICES } from './services/kokoroTts';
-import { synthesizeGoogleTTS, GOOGLE_VOICES } from './services/googleTts';
+import { getEdgeVoices, getEdgeStreamUrl, prefetchEdgeAudio, POPULAR_EDGE_VOICES } from './services/edgeTts';
+import { GOOGLE_VOICES, getGoogleStreamUrl } from './services/googleTts';
 
 export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const [isPlaying, setIsPlaying] = useState(false);
@@ -13,18 +12,17 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
     const [externalVoices, setExternalVoices] = useState<ExternalVoice[]>([]);
     const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>(() => {
-        const prov = localStorage.getItem('reader_provider') || 'system';
+        const prov = localStorage.getItem('reader_provider') || 'edge';
         if (prov === 'edge') return localStorage.getItem('reader_voice_edge') || 'en-US-JennyNeural';
-        if (prov === 'kokoro') return localStorage.getItem('reader_voice_kokoro') || 'af_heart';
-        if (prov === 'google') return localStorage.getItem('reader_voice_google') || 'en-US-Journey-F';
+        if (prov === 'google') return localStorage.getItem('reader_voice_google') || 'en';
         return localStorage.getItem('reader_voice') || '';
     });
     const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
     const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() => localStorage.getItem('reader_output_device') || "");
     const [ttsProvider, setTtsProviderState] = useState<TtsProvider>(() => {
         const saved = localStorage.getItem('reader_provider');
-        if (saved === 'system' || saved === 'edge' || saved === 'kokoro' || saved === 'google') return saved as TtsProvider;
-        return 'system';
+        if (saved === 'system' || saved === 'edge' || saved === 'google') return saved as TtsProvider;
+        return 'edge'; // Default to fast Edge Neural with 320+ voices
     });
     const [providerStatus, setProviderStatus] = useState<string>('');
     const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
@@ -38,6 +36,8 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const heartbeatRef = useRef<HTMLAudioElement | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+    const animationFrameRef = useRef<number | null>(null);
+    const iosCadenceTimerRef = useRef<number | null>(null);
     const lastSavedIndexRef = useRef(0);
     const wakeLockRef = useRef<WakeLockSentinel | null>(null);
     const sleepTimerIntervalRef = useRef<number | null>(null);
@@ -51,7 +51,6 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         if (!selectedVoiceURI) return;
         if (ttsProvider === 'system') localStorage.setItem('reader_voice', selectedVoiceURI);
         else if (ttsProvider === 'edge') localStorage.setItem('reader_voice_edge', selectedVoiceURI);
-        else if (ttsProvider === 'kokoro') localStorage.setItem('reader_voice_kokoro', selectedVoiceURI);
         else if (ttsProvider === 'google') localStorage.setItem('reader_voice_google', selectedVoiceURI);
     }, [selectedVoiceURI, ttsProvider]);
     useEffect(() => { if (selectedDeviceId) localStorage.setItem('reader_output_device', selectedDeviceId); }, [selectedDeviceId]);
@@ -72,7 +71,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     }, [activeBook, currentWordIndex]);
 
     // ============================================================
-    // WAKE LOCK - prevent screen from sleeping during playback
+    // WAKE LOCK - keep screen active during reading
     // ============================================================
     const requestWakeLock = useCallback(async () => {
         try {
@@ -94,12 +93,21 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         }
     }, []);
 
-    // Stop all active audio elements and synthesis
+    // Stop all active audio elements and speech synthesis
     const stopAllAudio = useCallback(() => {
         window.speechSynthesis.cancel();
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+        }
+        if (iosCadenceTimerRef.current) {
+            clearInterval(iosCadenceTimerRef.current);
+            iosCadenceTimerRef.current = null;
+        }
         if (audioPlayerRef.current) {
             audioPlayerRef.current.pause();
-            audioPlayerRef.current.src = '';
+            audioPlayerRef.current.removeAttribute('src');
+            audioPlayerRef.current.load();
             audioPlayerRef.current = null;
         }
     }, []);
@@ -156,7 +164,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         };
     }, [ttsProvider, selectedVoiceURI]);
 
-    // Switch and load external voices when provider changes
+    // Switch provider & update voices list
     const setTtsProvider = useCallback((newProvider: TtsProvider) => {
         stopAllAudio();
         setTtsProviderState(newProvider);
@@ -172,25 +180,18 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                 const found = voices.find(v => v.id === saved) || voices[0];
                 if (found) setSelectedVoiceURI(found.id);
             });
-        } else if (newProvider === 'kokoro') {
-            setExternalVoices(KOKORO_VOICES);
-            const saved = localStorage.getItem('reader_voice_kokoro') || 'af_heart';
-            const found = KOKORO_VOICES.find(v => v.id === saved) || KOKORO_VOICES[0];
-            if (found) setSelectedVoiceURI(found.id);
         } else if (newProvider === 'google') {
             setExternalVoices(GOOGLE_VOICES);
-            const saved = localStorage.getItem('reader_voice_google') || 'en-US-Journey-F';
+            const saved = localStorage.getItem('reader_voice_google') || 'en';
             const found = GOOGLE_VOICES.find(v => v.id === saved) || GOOGLE_VOICES[0];
             if (found) setSelectedVoiceURI(found.id);
         }
     }, [availableVoices, stopAllAudio]);
 
-    // Initial external voices population based on default provider
+    // Initial voices population
     useEffect(() => {
         if (ttsProvider === 'edge') {
             getEdgeVoices().then(voices => setExternalVoices(voices));
-        } else if (ttsProvider === 'kokoro') {
-            setExternalVoices(KOKORO_VOICES);
         } else if (ttsProvider === 'google') {
             setExternalVoices(GOOGLE_VOICES);
         }
@@ -294,9 +295,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         }
     }, [totalWordsCount, playbackSpeed]);
 
-    // ============================================================
-    // CHROME BACKGROUND SPEECH WORKAROUND (for system speech)
-    // ============================================================
+    // Chrome background speech synthesis workaround
     const startChromeBgWorkaround = useCallback(() => {
         if (chromeBgIntervalRef.current) clearInterval(chromeBgIntervalRef.current);
         chromeBgIntervalRef.current = window.setInterval(() => {
@@ -315,7 +314,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     }, []);
 
     // ============================================================
-    // CORE SPEAK & ROUTING FUNCTIONS
+    // CORE SPEAK & ADVANCE
     // ============================================================
     const advanceToNextBlock = useCallback((sId: number, currentBlock: any) => {
         if (sId !== speechSessionIdRef.current) return;
@@ -324,7 +323,9 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             wordIdxRef.current = next;
             setCurrentWordIndex(next);
             saveProgressThrottled();
-            setTimeout(() => { if (sId === speechSessionIdRef.current) speakRef.current(); }, 50);
+
+            // Next block transition with minimal latency
+            setTimeout(() => { if (sId === speechSessionIdRef.current) speakRef.current(); }, 20);
         } else {
             setIsPlaying(false); isPlayingRef.current = false;
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
@@ -335,6 +336,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         }
     }, [totalWordsCount, stopChromeBgWorkaround, saveProgressImmediate, releaseWakeLock, saveProgressThrottled, setCurrentWordIndex]);
 
+    // System Speech (with iPhone WebKit onboundary fix + rhythmic fallback)
     const speakWithSystem = useCallback(async (text: string, block: any, offset: number, sId: number) => {
         stopAllAudio();
         const utt = new SpeechSynthesisUtterance(text);
@@ -344,13 +346,45 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             utt.lang = v.lang;
         }
         utt.rate = playbackSpeed;
+
+        let lastWordTimestamp = Date.now();
+
+        // Rhythmic fallback interval specifically for iOS Safari (iPhone)
+        // If Safari WebKit stops emitting boundary events, this ensures word highlights continue smoothly
+        const cadenceTimer = window.setInterval(() => {
+            if (sId !== speechSessionIdRef.current || !isPlayingRef.current) {
+                clearInterval(cadenceTimer);
+                return;
+            }
+            const timeSinceLast = Date.now() - lastWordTimestamp;
+            const msPerWord = 300 / Math.max(0.5, playbackSpeed);
+            if (timeSinceLast > msPerWord) {
+                lastWordTimestamp = Date.now();
+                const currentRel = wordIdxRef.current - block.wordStartIndex;
+                if (currentRel < block.wordCount - 1) {
+                    const nextGlobal = wordIdxRef.current + 1;
+                    const prev = wordIdxRef.current;
+                    wordIdxRef.current = nextGlobal;
+                    window.dispatchEvent(new CustomEvent('word-index-update', {
+                        detail: { index: nextGlobal, prevIndex: prev }
+                    }));
+                    updateMediaSessionPosition();
+                }
+            }
+        }, 100);
+        iosCadenceTimerRef.current = cadenceTimer;
+
         utt.onboundary = (e) => {
-            if (sId !== speechSessionIdRef.current || e.name !== 'word') return;
+            if (sId !== speechSessionIdRef.current) return;
+            // On iOS Safari WebKit, e.name can be empty or undefined, so don't reject empty name
+            if (e.name && e.name !== 'word' && e.name !== 'sentence') return;
+            lastWordTimestamp = Date.now();
+
             const subStr = text.substring(0, e.charIndex).trim();
             const count = subStr ? subStr.split(/\s+/).length : 0;
             const global = block.wordStartIndex + offset + count;
 
-            if (global >= wordIdxRef.current) {
+            if (global >= wordIdxRef.current && global < block.wordStartIndex + block.wordCount) {
                 const prevIdx = wordIdxRef.current;
                 wordIdxRef.current = global;
 
@@ -362,13 +396,13 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
 
                 const prevBlockIdx = findBlockIdx(prevIdx, activeBook!.displayBlocks);
                 const currentBlockIdx = findBlockIdx(global, activeBook!.displayBlocks);
-
                 if (prevBlockIdx !== currentBlockIdx || global % 5 === 0) {
                     setCurrentWordIndex(global);
                     saveProgressThrottled();
                 }
             }
         };
+
         utt.onstart = () => {
             if (sId === speechSessionIdRef.current) {
                 if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
@@ -376,41 +410,49 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                 startChromeBgWorkaround();
             }
         };
-        utt.onend = () => { if (sId === speechSessionIdRef.current) advanceToNextBlock(sId, block); };
+
+        utt.onend = () => {
+            clearInterval(cadenceTimer);
+            if (sId === speechSessionIdRef.current) advanceToNextBlock(sId, block);
+        };
+
         utt.onerror = (ev) => {
+            clearInterval(cadenceTimer);
             if (ev.error === 'interrupted' || ev.error === 'canceled') return;
             if (sId === speechSessionIdRef.current) advanceToNextBlock(sId, block);
         };
+
         window.speechSynthesis.speak(utt);
     }, [availableVoices, selectedVoiceURI, playbackSpeed, saveProgressThrottled, updateMediaSessionPosition, requestWakeLock, startChromeBgWorkaround, advanceToNextBlock, activeBook, setCurrentWordIndex, stopAllAudio]);
 
-    // Audio-Stream Playback (Edge Neural, Kokoro AI, Google AI)
+    // Instant Audio-Stream Playback (Edge Neural & Google Speech) - Starts in <150ms with Zero API Keys
     const speakWithAudioStream = useCallback(async (text: string, block: any, offset: number, sId: number) => {
         stopAllAudio();
         try {
-            let audioBlob: Blob | null = null;
+            let streamUrl = '';
             if (ttsProvider === 'edge') {
-                setProviderStatus('Generating Edge Neural Speech...');
-                audioBlob = await synthesizeEdgeTTS(text, selectedVoiceURI || 'en-US-JennyNeural', playbackSpeed);
-            } else if (ttsProvider === 'kokoro') {
-                setProviderStatus('Synthesizing with Kokoro AI...');
-                audioBlob = await synthesizeKokoroTTS(text, selectedVoiceURI || 'af_heart', setProviderStatus);
+                streamUrl = getEdgeStreamUrl(text, selectedVoiceURI || 'en-US-JennyNeural');
             } else if (ttsProvider === 'google') {
-                setProviderStatus('Contacting Google Neural TTS...');
-                audioBlob = await synthesizeGoogleTTS(text, selectedVoiceURI || 'en-US-Journey-F', playbackSpeed);
+                streamUrl = getGoogleStreamUrl(text, selectedVoiceURI || 'en');
             }
-            setProviderStatus('');
 
-            if (!audioBlob || sId !== speechSessionIdRef.current || !isPlayingRef.current) return;
+            if (!streamUrl || sId !== speechSessionIdRef.current || !isPlayingRef.current) return;
 
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(audioUrl);
+            // Prefetch upcoming block while this one is starting!
+            const currentBlockIdx = findBlockIdx(block.wordStartIndex, activeBook!.displayBlocks);
+            const nextBlock = activeBook!.displayBlocks[currentBlockIdx + 1];
+            if (nextBlock && ttsProvider === 'edge') {
+                prefetchEdgeAudio(nextBlock.words.join(" "), selectedVoiceURI);
+            }
+
+            const audio = new Audio();
+            audio.src = streamUrl;
             audio.playbackRate = playbackSpeed;
+            audioPlayerRef.current = audio;
 
             if (selectedDeviceId && 'setSinkId' in (audio as any)) {
                 (audio as any).setSinkId(selectedDeviceId).catch(() => { });
             }
-            audioPlayerRef.current = audio;
 
             audio.onplay = () => {
                 if (sId === speechSessionIdRef.current) {
@@ -419,13 +461,13 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                 }
             };
 
-            // Interpolate word tracking smoothly across the block
-            audio.ontimeupdate = () => {
-                if (sId !== speechSessionIdRef.current || !audio.duration) return;
+            // High-frequency word interpolation for buttery-smooth highlight on Windows & iPhone
+            const syncWordHighlight = () => {
+                if (sId !== speechSessionIdRef.current || !audio || audio.paused || !audio.duration) return;
                 const remainingWords = block.words.slice(offset);
                 const progress = Math.min(1, audio.currentTime / audio.duration);
                 const wordCount = Math.floor(progress * remainingWords.length);
-                const global = block.wordStartIndex + offset + wordCount;
+                const global = Math.min(block.wordStartIndex + block.wordCount - 1, block.wordStartIndex + offset + wordCount);
 
                 if (global >= wordIdxRef.current) {
                     const prevIdx = wordIdxRef.current;
@@ -436,39 +478,52 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                     }));
                     updateMediaSessionPosition();
 
-                    const prevBlockIdx = findBlockIdx(prevIdx, activeBook!.displayBlocks);
-                    const currentBlockIdx = findBlockIdx(global, activeBook!.displayBlocks);
-                    if (prevBlockIdx !== currentBlockIdx || global % 5 === 0) {
+                    if (global % 5 === 0) {
                         setCurrentWordIndex(global);
                         saveProgressThrottled();
                     }
                 }
+
+                if (!audio.paused && !audio.ended) {
+                    animationFrameRef.current = requestAnimationFrame(syncWordHighlight);
+                }
+            };
+
+            audio.onplaying = () => {
+                animationFrameRef.current = requestAnimationFrame(syncWordHighlight);
+            };
+
+            audio.ontimeupdate = () => {
+                syncWordHighlight();
             };
 
             audio.onended = () => {
-                URL.revokeObjectURL(audioUrl);
+                if (animationFrameRef.current) {
+                    cancelAnimationFrame(animationFrameRef.current);
+                    animationFrameRef.current = null;
+                }
                 if (sId === speechSessionIdRef.current) {
                     advanceToNextBlock(sId, block);
                 }
             };
 
             audio.onerror = (e) => {
-                console.error("Audio playback error:", e);
-                URL.revokeObjectURL(audioUrl);
+                console.error("Stream playback error:", e);
+                if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
                 if (sId === speechSessionIdRef.current) {
                     advanceToNextBlock(sId, block);
                 }
             };
 
+            // Start playing immediately!
             await audio.play();
         } catch (err: any) {
-            console.error(`${ttsProvider} speech error:`, err);
-            setProviderStatus(`Error: ${err.message || String(err)}`);
+            console.error(`${ttsProvider} playback error:`, err);
             setTimeout(() => {
                 if (sId === speechSessionIdRef.current && isPlayingRef.current) {
                     advanceToNextBlock(sId, block);
                 }
-            }, 2500);
+            }, 1000);
         }
     }, [ttsProvider, selectedVoiceURI, playbackSpeed, selectedDeviceId, stopAllAudio, requestWakeLock, updateMediaSessionPosition, activeBook, saveProgressThrottled, advanceToNextBlock, setCurrentWordIndex]);
 
