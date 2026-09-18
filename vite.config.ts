@@ -54,13 +54,18 @@ function edgeTtsPlugin(): Plugin {
           await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
           const { audioStream } = tts.toStream(text);
 
-          res.setHeader('Content-Type', 'audio/mpeg');
-          res.setHeader('Access-Control-Allow-Origin', '*');
-          res.setHeader('Cache-Control', 'public, max-age=86400');
+          const chunks: Buffer[] = [];
+          audioStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+          audioStream.on('close', () => {
+            const buffer = Buffer.concat(chunks);
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('Content-Length', buffer.length);
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            res.end(buffer);
+          });
 
-          audioStream.pipe(res);
-
-          audioStream.on('error', (err) => {
+          audioStream.on('error', (err: any) => {
             console.error('Edge stream error:', err);
             if (!res.headersSent) {
               res.statusCode = 500;

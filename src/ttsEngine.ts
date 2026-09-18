@@ -369,6 +369,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                         detail: { index: nextGlobal, prevIndex: prev }
                     }));
                     updateMediaSessionPosition();
+                    setCurrentWordIndex(nextGlobal);
                 }
             }
         }, 100);
@@ -393,13 +394,8 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                 }));
 
                 updateMediaSessionPosition();
-
-                const prevBlockIdx = findBlockIdx(prevIdx, activeBook!.displayBlocks);
-                const currentBlockIdx = findBlockIdx(global, activeBook!.displayBlocks);
-                if (prevBlockIdx !== currentBlockIdx || global % 5 === 0) {
-                    setCurrentWordIndex(global);
-                    saveProgressThrottled();
-                }
+                setCurrentWordIndex(global);
+                saveProgressThrottled();
             }
         };
 
@@ -463,9 +459,16 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
 
             // High-frequency word interpolation for buttery-smooth highlight on Windows & iPhone
             const syncWordHighlight = () => {
-                if (sId !== speechSessionIdRef.current || !audio || audio.paused || !audio.duration) return;
+                if (sId !== speechSessionIdRef.current || !audio || audio.paused) return;
                 const remainingWords = block.words.slice(offset);
-                const progress = Math.min(1, audio.currentTime / audio.duration);
+                if (remainingWords.length === 0) return;
+
+                // Accurate duration calculation with fallback
+                const validDuration = (audio.duration && isFinite(audio.duration) && audio.duration > 0)
+                    ? audio.duration
+                    : Math.max(0.5, (remainingWords.length / 3) / playbackSpeed);
+
+                const progress = Math.min(0.999, audio.currentTime / validDuration);
                 const wordCount = Math.floor(progress * remainingWords.length);
                 const global = Math.min(block.wordStartIndex + block.wordCount - 1, block.wordStartIndex + offset + wordCount);
 
@@ -477,11 +480,8 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                         detail: { index: global, prevIndex: prevIdx }
                     }));
                     updateMediaSessionPosition();
-
-                    if (global % 5 === 0) {
-                        setCurrentWordIndex(global);
-                        saveProgressThrottled();
-                    }
+                    setCurrentWordIndex(global);
+                    saveProgressThrottled();
                 }
 
                 if (!audio.paused && !audio.ended) {
