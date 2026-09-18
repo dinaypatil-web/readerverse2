@@ -1,6 +1,16 @@
 // --- Core Types for ReaderVerse 2 ---
 
-export type TtsProvider = 'system' | 'gemini';
+export type TtsProvider = 'system' | 'edge' | 'kokoro' | 'google';
+
+export interface ExternalVoice {
+    id: string;
+    name: string;
+    lang: string;
+    gender?: 'Male' | 'Female';
+    provider: 'edge' | 'kokoro' | 'google';
+    tag?: string;
+    description?: string;
+}
 export type ScrollMode = 'follow' | 'snap' | 'manual';
 export type ScrollSpeed = 'slow' | 'medium' | 'fast';
 

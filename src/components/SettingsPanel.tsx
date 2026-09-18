@@ -1,6 +1,7 @@
-import React from 'react';
-import { X, ChevronRight, Globe, Volume2 } from 'lucide-react';
-import { TtsProvider, ScrollMode, ScrollSpeed } from '../types';
+import React, { useState } from 'react';
+import { X, ChevronRight, Globe, Zap, Brain, Sparkles, Key, Eye, EyeOff, Check, Info } from 'lucide-react';
+import { TtsProvider, ScrollMode, ScrollSpeed, ExternalVoice } from '../types';
+import { getGoogleApiKey, setGoogleApiKey } from '../services/googleTts';
 
 interface SettingsPanelProps {
     isOpen: boolean;
@@ -8,8 +9,10 @@ interface SettingsPanelProps {
     ttsProvider: TtsProvider;
     setTtsProvider: (v: TtsProvider) => void;
     availableVoices: SpeechSynthesisVoice[];
+    externalVoices?: ExternalVoice[];
     selectedVoiceURI: string;
     setSelectedVoiceURI: (v: string) => void;
+    providerStatus?: string;
     availableDevices: MediaDeviceInfo[];
     selectedDeviceId: string;
     setSelectedDeviceId: (v: string) => void;
@@ -28,76 +31,192 @@ interface SettingsPanelProps {
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     isOpen, onClose,
     ttsProvider, setTtsProvider,
-    availableVoices, selectedVoiceURI, setSelectedVoiceURI,
+    availableVoices, externalVoices = [], selectedVoiceURI, setSelectedVoiceURI,
+    providerStatus,
     availableDevices, selectedDeviceId, setSelectedDeviceId,
     fontSize, setFontSize,
     theme, setTheme,
     playbackSpeed, setPlaybackSpeed,
     scrollMode, setScrollMode, scrollSpeed, setScrollSpeed,
 }) => {
+    const [apiKey, setApiKey] = useState(() => getGoogleApiKey());
+    const [showKey, setShowKey] = useState(false);
+    const [keySaved, setKeySaved] = useState(false);
+
     if (!isOpen) return null;
+
+    const handleSaveKey = (newKey: string) => {
+        setApiKey(newKey);
+        setGoogleApiKey(newKey);
+        setKeySaved(true);
+        setTimeout(() => setKeySaved(false), 2000);
+    };
 
     return (
         <div className="fixed inset-0 z-[110] flex items-end animate-fade-in">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-md" onClick={onClose} />
-            <div className="relative w-full rounded-t-[5rem] p-10 pb-20 border-t border-white/10 animate-slide-up glass max-h-[90vh] overflow-y-auto no-scrollbar shadow-5xl">
-                <div className="w-12 h-1.5 bg-zinc-500/10 rounded-full mx-auto mb-10" />
-                <div className="flex justify-between items-center mb-12">
-                    <h2 className="text-2xl font-black uppercase tracking-widest opacity-60">Settings</h2>
-                    <button onClick={onClose} className="p-4 bg-zinc-500/10 rounded-full active:scale-90 transition-all"><X size={24} /></button>
+            <div className="relative w-full rounded-t-[4rem] p-8 sm:p-10 pb-20 border-t border-white/10 animate-slide-up glass max-h-[90vh] overflow-y-auto no-scrollbar shadow-5xl">
+                <div className="w-12 h-1.5 bg-zinc-500/20 rounded-full mx-auto mb-8" />
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <h2 className="text-2xl font-black uppercase tracking-widest opacity-80">Settings & Audio</h2>
+                        <p className="text-xs opacity-50 font-medium">Configure neural speech engine & reader preferences</p>
+                    </div>
+                    <button onClick={onClose} className="p-3 bg-zinc-500/10 rounded-full active:scale-90 transition-all hover:bg-zinc-500/20"><X size={22} /></button>
                 </div>
-                <div className="max-w-xl mx-auto space-y-12 pb-10">
-                    {/* TTS Provider */}
-                    <div className="space-y-6">
-                        <span className="text-[11px] font-black opacity-30 uppercase tracking-widest block">Neural Provider</span>
-                        <div className="grid grid-cols-2 gap-4">
+
+                {providerStatus && (
+                    <div className="mb-6 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center gap-3 text-blue-400 text-xs font-semibold animate-pulse">
+                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping" />
+                        <span>{providerStatus}</span>
+                    </div>
+                )}
+
+                <div className="max-w-xl mx-auto space-y-10 pb-10">
+                    {/* TTS Provider Grid */}
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <span className="text-[11px] font-black opacity-40 uppercase tracking-widest block">Neural Speech Engine</span>
+                            <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-0.5 rounded-full uppercase">
+                                {ttsProvider === 'system' ? 'Native WebSpeech' : ttsProvider === 'edge' ? 'Free Cloud Neural' : ttsProvider === 'kokoro' ? 'Offline AI WASM' : 'Google AI'}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {/* System */}
                             <button onClick={() => setTtsProvider('system')}
-                                className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all ${ttsProvider === 'system' ? 'border-blue-600 bg-blue-600 text-white shadow-xl' : 'border-zinc-500/5 bg-zinc-500/5 opacity-40'}`}>
-                                <Globe size={24} />
-                                <span className="text-xs font-black uppercase">System</span>
+                                className={`flex flex-col items-center justify-center text-center gap-2 p-4 rounded-2xl border-2 transition-all ${ttsProvider === 'system' ? 'border-blue-600 bg-blue-600 text-white shadow-lg scale-[1.02]' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}>
+                                <Globe size={22} />
+                                <span className="text-xs font-black uppercase tracking-tight">System</span>
+                                <span className="text-[9px] opacity-75 leading-none">Native Device</span>
                             </button>
-                            <button onClick={() => setTtsProvider('gemini')}
-                                className={`flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all ${ttsProvider === 'gemini' ? 'border-blue-600 bg-blue-600 text-white shadow-xl' : 'border-zinc-500/5 bg-zinc-500/5 opacity-40'}`}>
-                                <Volume2 size={24} />
-                                <span className="text-xs font-black uppercase tracking-tighter">Gemini</span>
+
+                            {/* Edge Neural */}
+                            <button onClick={() => setTtsProvider('edge')}
+                                className={`flex flex-col items-center justify-center text-center gap-2 p-4 rounded-2xl border-2 transition-all ${ttsProvider === 'edge' ? 'border-blue-600 bg-blue-600 text-white shadow-lg scale-[1.02]' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}>
+                                <Zap size={22} className={ttsProvider === 'edge' ? 'text-amber-300' : 'text-amber-500'} />
+                                <span className="text-xs font-black uppercase tracking-tight">Edge Neural</span>
+                                <span className="text-[9px] opacity-75 leading-none">Free 300+ Voices</span>
+                            </button>
+
+                            {/* Kokoro AI */}
+                            <button onClick={() => setTtsProvider('kokoro')}
+                                className={`flex flex-col items-center justify-center text-center gap-2 p-4 rounded-2xl border-2 transition-all ${ttsProvider === 'kokoro' ? 'border-blue-600 bg-blue-600 text-white shadow-lg scale-[1.02]' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}>
+                                <Brain size={22} className={ttsProvider === 'kokoro' ? 'text-purple-300' : 'text-purple-400'} />
+                                <span className="text-xs font-black uppercase tracking-tight">Kokoro AI</span>
+                                <span className="text-[9px] opacity-75 leading-none">Local Offline</span>
+                            </button>
+
+                            {/* Google Cloud / Gemini */}
+                            <button onClick={() => setTtsProvider('google')}
+                                className={`flex flex-col items-center justify-center text-center gap-2 p-4 rounded-2xl border-2 transition-all ${ttsProvider === 'google' ? 'border-blue-600 bg-blue-600 text-white shadow-lg scale-[1.02]' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}>
+                                <Sparkles size={22} className={ttsProvider === 'google' ? 'text-yellow-300' : 'text-yellow-400'} />
+                                <span className="text-xs font-black uppercase tracking-tight">Google AI</span>
+                                <span className="text-[9px] opacity-75 leading-none">Journey & Studio</span>
                             </button>
                         </div>
+
+                        {/* Informative Provider Cards */}
+                        {ttsProvider === 'edge' && (
+                            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300/90 flex items-start gap-2.5">
+                                <Info size={16} className="mt-0.5 shrink-0 text-amber-400" />
+                                <div>
+                                    <p className="font-semibold text-amber-200">Microsoft Edge Neural Voices (100% Free)</p>
+                                    <p className="opacity-80 text-[11px] mt-0.5">Ultra-realistic studio natural speech. Fully supports background audio and lock-screen playback on iPhone Safari and Android.</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {ttsProvider === 'kokoro' && (
+                            <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-300/90 flex items-start gap-2.5">
+                                <Info size={16} className="mt-0.5 shrink-0 text-purple-400" />
+                                <div>
+                                    <p className="font-semibold text-purple-200">Kokoro-82M In-Browser Neural Model</p>
+                                    <p className="opacity-80 text-[11px] mt-0.5">Runs 100% privately on your device via WebAssembly/WebGPU. No audio ever leaves your browser, working completely offline once cached.</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {ttsProvider === 'google' && (
+                            <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 space-y-3">
+                                <div className="flex items-start gap-2.5 text-xs text-blue-300">
+                                    <Key size={16} className="mt-0.5 shrink-0 text-blue-400" />
+                                    <div>
+                                        <p className="font-semibold text-blue-200">Google Cloud / AI Studio Key Required</p>
+                                        <p className="opacity-80 text-[11px] mt-0.5">Access Google's Journey, Studio, and Neural2 voices using your free key from Google AI Studio / Google Cloud.</p>
+                                    </div>
+                                </div>
+                                <div className="relative flex items-center">
+                                    <input
+                                        type={showKey ? "text" : "password"}
+                                        placeholder="Paste AI Studio / Google Cloud API Key..."
+                                        value={apiKey}
+                                        onChange={e => handleSaveKey(e.target.value)}
+                                        className="w-full py-3 px-4 pr-20 text-xs rounded-xl bg-zinc-900/60 border border-blue-500/30 text-white placeholder-zinc-500 outline-none focus:border-blue-500 font-mono"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowKey(!showKey)}
+                                        className="absolute right-3 p-1.5 opacity-60 hover:opacity-100 transition-opacity"
+                                    >
+                                        {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </button>
+                                </div>
+                                {keySaved && (
+                                    <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-semibold">
+                                        <Check size={12} /> Key saved locally
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Voice Selector */}
-                    {ttsProvider === 'system' && (
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-center">
-                                <span className="text-[11px] font-black opacity-30 uppercase tracking-widest">Voice</span>
-                                <span className="text-[10px] font-black text-blue-600 bg-blue-600/10 px-3 py-1 rounded-full uppercase">{availableVoices.length} Voices</span>
-                            </div>
-                            <div className="relative group">
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <span className="text-[11px] font-black opacity-40 uppercase tracking-widest">
+                                {ttsProvider === 'system' ? 'Device Voice' : `${ttsProvider.toUpperCase()} Voice`}
+                            </span>
+                            <span className="text-[10px] font-black text-blue-500 bg-blue-500/10 px-3 py-1 rounded-full uppercase">
+                                {ttsProvider === 'system' ? `${availableVoices.length} Voices` : `${externalVoices.length} Voices`}
+                            </span>
+                        </div>
+                        <div className="relative group">
+                            {ttsProvider === 'system' ? (
                                 <select value={selectedVoiceURI} onChange={e => setSelectedVoiceURI(e.target.value)}
-                                    className="w-full p-6 pr-12 rounded-[2.5rem] bg-zinc-500/5 border-2 border-transparent focus:border-blue-600 outline-none font-bold appearance-none dark:text-white transition-all truncate shadow-inner">
-                                    {availableVoices.length === 0 ? <option>Loading Voices...</option> : availableVoices.map(v => (
+                                    className="w-full p-5 pr-12 rounded-2xl bg-zinc-500/5 border-2 border-transparent focus:border-blue-600 outline-none font-bold appearance-none dark:text-white transition-all truncate shadow-inner">
+                                    {availableVoices.length === 0 ? <option>Loading System Voices...</option> : availableVoices.map(v => (
                                         <option key={v.voiceURI} value={v.voiceURI}>
                                             {v.default ? '★ ' : ''}{v.name.replace(/(Microsoft |Google |Natural |Online |Premium )/g, '')} ({v.lang}) {v.default ? '(Default)' : ''}
                                         </option>
                                     ))}
                                 </select>
-                                <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 rotate-90 opacity-40 pointer-events-none" />
-                            </div>
+                            ) : (
+                                <select value={selectedVoiceURI} onChange={e => setSelectedVoiceURI(e.target.value)}
+                                    className="w-full p-5 pr-12 rounded-2xl bg-zinc-500/5 border-2 border-transparent focus:border-blue-600 outline-none font-bold appearance-none dark:text-white transition-all truncate shadow-inner">
+                                    {externalVoices.length === 0 ? <option>Loading Voices...</option> : externalVoices.map(v => (
+                                        <option key={v.id} value={v.id}>
+                                            {v.name} {v.gender ? `— ${v.gender}` : ''} {v.tag ? `[${v.tag}]` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                            <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 rotate-90 opacity-40 pointer-events-none" />
                         </div>
-                    )}
+                    </div>
 
                     {/* Audio Output Selector */}
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <span className="text-[11px] font-black opacity-30 uppercase tracking-widest">Audio Output</span>
-                            <span className="text-[10px] font-black text-blue-600 bg-blue-600/10 px-3 py-1 rounded-full uppercase">{availableDevices.length} Devices</span>
+                            <span className="text-[11px] font-black opacity-40 uppercase tracking-widest">Audio Output Destination</span>
+                            <span className="text-[10px] font-black text-blue-500 bg-blue-500/10 px-3 py-1 rounded-full uppercase">{availableDevices.length} Devices</span>
                         </div>
                         <div className="relative group">
                             <select value={selectedDeviceId} onChange={e => setSelectedDeviceId(e.target.value)}
-                                className="w-full p-6 pr-12 rounded-[2.5rem] bg-zinc-500/5 border-2 border-transparent focus:border-blue-600 outline-none font-bold appearance-none dark:text-white transition-all truncate shadow-inner">
-                                <option value="">Default System Output</option>
+                                className="w-full p-5 pr-12 rounded-2xl bg-zinc-500/5 border-2 border-transparent focus:border-blue-600 outline-none font-bold appearance-none dark:text-white transition-all truncate shadow-inner">
+                                <option value="">Default Audio Output (Speaker/Headphones)</option>
                                 {availableDevices.map(d => (
                                     <option key={d.deviceId} value={d.deviceId}>
-                                        {d.label || `Speaker/Headphones (${d.deviceId.slice(0, 5)})`}
+                                        {d.label || `Audio Output (${d.deviceId.slice(0, 5)})`}
                                     </option>
                                 ))}
                             </select>
@@ -106,10 +225,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     </div>
 
                     {/* Font Size */}
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <span className="text-[11px] font-black opacity-30 uppercase tracking-widest">Typeface Size</span>
-                            <span className="text-xl font-black text-blue-600">{fontSize}px</span>
+                            <span className="text-[11px] font-black opacity-40 uppercase tracking-widest">Typeface Size</span>
+                            <span className="text-lg font-black text-blue-500">{fontSize}px</span>
                         </div>
                         <input type="range" min="14" max="32" step="1" value={fontSize}
                             onChange={e => setFontSize(parseInt(e.target.value))}
@@ -117,21 +236,21 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     </div>
 
                     {/* Theme */}
-                    <div className="space-y-6">
-                        <span className="text-[11px] font-black opacity-30 uppercase tracking-widest block">Theme</span>
-                        <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-4">
+                        <span className="text-[11px] font-black opacity-40 uppercase tracking-widest block">Color Palette Theme</span>
+                        <div className="grid grid-cols-3 gap-3">
                             {(['light', 'dark', 'sepia'] as const).map(t => (
                                 <button key={t} onClick={() => setTheme(t)}
-                                    className={`py-4 rounded-2xl text-xs font-black capitalize border-2 transition-all ${theme === t ? 'border-blue-600 bg-blue-600 text-white shadow-xl scale-105' : 'border-zinc-500/5 bg-zinc-500/5 opacity-40'}`}>{t}</button>
+                                    className={`py-3.5 rounded-2xl text-xs font-black capitalize border-2 transition-all ${theme === t ? 'border-blue-600 bg-blue-600 text-white shadow-lg scale-105' : 'border-zinc-500/10 bg-zinc-500/5 opacity-50 hover:opacity-80'}`}>{t}</button>
                             ))}
                         </div>
                     </div>
 
                     {/* Playback Speed */}
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         <div className="flex justify-between items-center">
-                            <span className="text-[11px] font-black opacity-30 uppercase tracking-widest">Speed</span>
-                            <span className="text-xl font-black text-blue-600">{playbackSpeed}x</span>
+                            <span className="text-[11px] font-black opacity-40 uppercase tracking-widest">Speech Playback Speed</span>
+                            <span className="text-lg font-black text-blue-500">{playbackSpeed}x</span>
                         </div>
                         <input type="range" min="0.5" max="3.0" step="0.1" value={playbackSpeed}
                             onChange={e => setPlaybackSpeed(parseFloat(e.target.value))}
@@ -139,24 +258,24 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     </div>
 
                     {/* Scroll Mode */}
-                    <div className="space-y-6">
-                        <span className="text-[11px] font-black opacity-30 uppercase tracking-widest block">Scroll Tracking</span>
-                        <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-4">
+                        <span className="text-[11px] font-black opacity-40 uppercase tracking-widest block">Reading Scroll Tracking</span>
+                        <div className="grid grid-cols-3 gap-3">
                             {(['follow', 'snap', 'manual'] as const).map(m => (
                                 <button key={m} onClick={() => setScrollMode(m)}
-                                    className={`py-4 rounded-2xl text-xs font-black capitalize border-2 transition-all ${scrollMode === m ? 'border-blue-600 bg-blue-600 text-white shadow-xl scale-105' : 'border-zinc-500/5 bg-zinc-500/5 opacity-40'}`}>{m}</button>
+                                    className={`py-3.5 rounded-2xl text-xs font-black capitalize border-2 transition-all ${scrollMode === m ? 'border-blue-600 bg-blue-600 text-white shadow-lg scale-105' : 'border-zinc-500/10 bg-zinc-500/5 opacity-50 hover:opacity-80'}`}>{m}</button>
                             ))}
                         </div>
                         {scrollMode !== 'manual' && (
-                            <div className="space-y-3">
+                            <div className="space-y-2 mt-2">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-[10px] font-black opacity-30 uppercase tracking-widest">Scroll Speed</span>
-                                    <span className="text-sm font-black text-blue-600 capitalize">{scrollSpeed}</span>
+                                    <span className="text-[10px] font-black opacity-40 uppercase tracking-widest">Scroll Speed</span>
+                                    <span className="text-xs font-black text-blue-500 capitalize">{scrollSpeed}</span>
                                 </div>
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="grid grid-cols-3 gap-2">
                                     {(['slow', 'medium', 'fast'] as const).map(s => (
                                         <button key={s} onClick={() => setScrollSpeed(s)}
-                                            className={`py-3 rounded-xl text-[10px] font-black capitalize transition-all ${scrollSpeed === s ? 'bg-blue-600 text-white shadow-lg' : 'bg-zinc-500/5 opacity-40'}`}>{s}</button>
+                                            className={`py-2.5 rounded-xl text-[10px] font-black capitalize transition-all ${scrollSpeed === s ? 'bg-blue-600 text-white shadow-md' : 'bg-zinc-500/10 opacity-60'}`}>{s}</button>
                                     ))}
                                 </div>
                             </div>

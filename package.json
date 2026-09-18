@@ -9,11 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "epubjs": "^0.3.93",
+    "kokoro-js": "^1.2.1",
     "lucide-react": "^0.562.0",
+    "msedge-tts": "^2.0.7",
+    "pdfjs-dist": "4.10.38",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "epubjs": "^0.3.93",
-    "pdfjs-dist": "4.10.38"
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

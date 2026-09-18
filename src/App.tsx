@@ -299,8 +299,10 @@ const App = () => {
                 ttsProvider={tts.ttsProvider}
                 setTtsProvider={tts.setTtsProvider}
                 availableVoices={tts.availableVoices}
+                externalVoices={tts.externalVoices}
                 selectedVoiceURI={tts.selectedVoiceURI}
                 setSelectedVoiceURI={tts.setSelectedVoiceURI}
+                providerStatus={tts.providerStatus}
                 availableDevices={tts.availableDevices}
                 selectedDeviceId={tts.selectedDeviceId}
                 setSelectedDeviceId={tts.setSelectedDeviceId}
