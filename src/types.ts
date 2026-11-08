@@ -2,6 +2,13 @@
 
 export type TtsProvider = 'system' | 'edge' | 'kokoro' | 'google';
 
+export interface ReadingStyle {
+    id: string;
+    label: string;
+    description: string;
+    emoji: string;
+}
+
 export interface ExternalVoice {
     id: string;
     name: string;

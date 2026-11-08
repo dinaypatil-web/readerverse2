@@ -302,6 +302,8 @@ const App = () => {
                 externalVoices={tts.externalVoices}
                 selectedVoiceURI={tts.selectedVoiceURI}
                 setSelectedVoiceURI={tts.setSelectedVoiceURI}
+                readingStyle={tts.readingStyle}
+                setReadingStyle={tts.setReadingStyle}
                 providerStatus={tts.providerStatus}
                 availableDevices={tts.availableDevices}
                 selectedDeviceId={tts.selectedDeviceId}

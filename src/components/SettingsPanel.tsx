@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, ChevronRight, Globe, Zap, Volume2, Info } from 'lucide-react';
+import { X, ChevronRight, Globe, Zap, Volume2, Info, Sparkles } from 'lucide-react';
 import { TtsProvider, ScrollMode, ScrollSpeed, ExternalVoice } from '../types';
+import { EDGE_READING_STYLES } from '../services/edgeTts';
 
 interface SettingsPanelProps {
     isOpen: boolean;
@@ -11,6 +12,8 @@ interface SettingsPanelProps {
     externalVoices?: ExternalVoice[];
     selectedVoiceURI: string;
     setSelectedVoiceURI: (v: string) => void;
+    readingStyle?: string;
+    setReadingStyle?: (v: string) => void;
     providerStatus?: string;
     availableDevices: MediaDeviceInfo[];
     selectedDeviceId: string;
@@ -31,6 +34,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     isOpen, onClose,
     ttsProvider, setTtsProvider,
     availableVoices, externalVoices = [], selectedVoiceURI, setSelectedVoiceURI,
+    readingStyle = 'general', setReadingStyle,
     providerStatus,
     availableDevices, selectedDeviceId, setSelectedDeviceId,
     fontSize, setFontSize,
@@ -69,29 +73,37 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 100% Free • No API Key
                             </span>
                         </div>
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             {/* Edge Neural */}
                             <button onClick={() => setTtsProvider('edge')}
-                                className={`flex flex-col items-center justify-center text-center gap-2 p-4 rounded-2xl border-2 transition-all ${ttsProvider === 'edge' ? 'border-blue-600 bg-blue-600 text-white shadow-lg scale-[1.02]' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}>
+                                className={`flex flex-col items-center justify-center text-center gap-2 p-3.5 rounded-2xl border-2 transition-all ${ttsProvider === 'edge' ? 'border-amber-500 bg-amber-500/20 text-white shadow-lg scale-[1.02]' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}>
                                 <Zap size={22} className={ttsProvider === 'edge' ? 'text-amber-300' : 'text-amber-500'} />
                                 <span className="text-xs font-black uppercase tracking-tight">Edge Neural</span>
-                                <span className="text-[9px] opacity-75 leading-none">320+ Voices</span>
+                                <span className="text-[9px] opacity-75 leading-none">320+ & Styles</span>
                             </button>
 
-                            {/* System */}
-                            <button onClick={() => setTtsProvider('system')}
-                                className={`flex flex-col items-center justify-center text-center gap-2 p-4 rounded-2xl border-2 transition-all ${ttsProvider === 'system' ? 'border-blue-600 bg-blue-600 text-white shadow-lg scale-[1.02]' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}>
-                                <Globe size={22} />
-                                <span className="text-xs font-black uppercase tracking-tight">System</span>
-                                <span className="text-[9px] opacity-75 leading-none">Native Device</span>
+                            {/* Kokoro AI */}
+                            <button onClick={() => setTtsProvider('kokoro')}
+                                className={`flex flex-col items-center justify-center text-center gap-2 p-3.5 rounded-2xl border-2 transition-all ${ttsProvider === 'kokoro' ? 'border-purple-500 bg-purple-500/20 text-white shadow-lg scale-[1.02]' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}>
+                                <Sparkles size={22} className={ttsProvider === 'kokoro' ? 'text-purple-300' : 'text-purple-400'} />
+                                <span className="text-xs font-black uppercase tracking-tight">Kokoro AI</span>
+                                <span className="text-[9px] opacity-75 leading-none">On-Device 82M</span>
                             </button>
 
                             {/* Google Speech */}
                             <button onClick={() => setTtsProvider('google')}
-                                className={`flex flex-col items-center justify-center text-center gap-2 p-4 rounded-2xl border-2 transition-all ${ttsProvider === 'google' ? 'border-blue-600 bg-blue-600 text-white shadow-lg scale-[1.02]' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}>
+                                className={`flex flex-col items-center justify-center text-center gap-2 p-3.5 rounded-2xl border-2 transition-all ${ttsProvider === 'google' ? 'border-emerald-500 bg-emerald-500/20 text-white shadow-lg scale-[1.02]' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}>
                                 <Volume2 size={22} className={ttsProvider === 'google' ? 'text-emerald-300' : 'text-emerald-400'} />
                                 <span className="text-xs font-black uppercase tracking-tight">Google Speech</span>
                                 <span className="text-[9px] opacity-75 leading-none">Free Public</span>
+                            </button>
+
+                            {/* System */}
+                            <button onClick={() => setTtsProvider('system')}
+                                className={`flex flex-col items-center justify-center text-center gap-2 p-3.5 rounded-2xl border-2 transition-all ${ttsProvider === 'system' ? 'border-blue-500 bg-blue-500/20 text-white shadow-lg scale-[1.02]' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}>
+                                <Globe size={22} className={ttsProvider === 'system' ? 'text-blue-300' : 'text-blue-400'} />
+                                <span className="text-xs font-black uppercase tracking-tight">System</span>
+                                <span className="text-[9px] opacity-75 leading-none">Native Device</span>
                             </button>
                         </div>
 
@@ -100,8 +112,18 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300/90 flex items-start gap-2.5">
                                 <Info size={16} className="mt-0.5 shrink-0 text-amber-400" />
                                 <div>
-                                    <p className="font-semibold text-amber-200">Instant Streaming & Lock Screen Support</p>
-                                    <p className="opacity-80 text-[11px] mt-0.5">Zero API keys required. Starts audio in under 150ms with next-block background prefetching. Keeps playing seamlessly when your iPhone or Android screen locks.</p>
+                                    <p className="font-semibold text-amber-200">Expressive Streaming & SSML Reading Styles</p>
+                                    <p className="opacity-80 text-[11px] mt-0.5">Zero API keys required. 320+ Microsoft Azure neural voices with support for specialized reading styles (Audiobook, Empathetic, Cheerful, Poetic). Background prefetching ensures 0ms pause between sentences.</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {ttsProvider === 'kokoro' && (
+                            <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-300/90 flex items-start gap-2.5">
+                                <Sparkles size={16} className="mt-0.5 shrink-0 text-purple-400" />
+                                <div>
+                                    <p className="font-semibold text-purple-200">Kokoro-82M On-Device Neural AI</p>
+                                    <p className="opacity-80 text-[11px] mt-0.5">Top-rated open-weight model with benchmark audiobook quality matching ElevenLabs. Runs entirely on-device via WebAssembly ONNX with zero server dependencies and 100% privacy.</p>
                                 </div>
                             </div>
                         )}
@@ -127,11 +149,43 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         )}
                     </div>
 
+                    {/* Edge Reading Style Selector */}
+                    {ttsProvider === 'edge' && setReadingStyle && (
+                        <div className="space-y-3 p-4 rounded-2xl bg-zinc-500/5 border border-zinc-500/10">
+                            <div className="flex justify-between items-center">
+                                <span className="text-[11px] font-black opacity-60 uppercase tracking-wider flex items-center gap-1.5">
+                                    <span>🎭</span> Expressive Reading Style (SSML)
+                                </span>
+                                <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full font-bold uppercase">
+                                    AI Mood & Tone
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {EDGE_READING_STYLES.map(style => (
+                                    <button
+                                        key={style.id}
+                                        onClick={() => setReadingStyle(style.id)}
+                                        className={`p-2.5 rounded-xl border text-left transition-all flex flex-col gap-0.5 ${readingStyle === style.id ? 'border-amber-500 bg-amber-500/20 text-amber-200 shadow-sm' : 'border-zinc-500/10 bg-zinc-500/5 opacity-70 hover:opacity-100'}`}
+                                    >
+                                        <div className="flex items-center gap-1.5 font-bold text-xs truncate">
+                                            <span>{style.emoji}</span>
+                                            <span className="truncate">{style.label}</span>
+                                        </div>
+                                        <span className="text-[9px] opacity-60 leading-tight truncate">{style.description}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-[10px] opacity-40 italic">
+                                Tip: Styles are most expressive with Aria, Jenny, Guy, Xiaoxiao, and Sonia voices.
+                            </p>
+                        </div>
+                    )}
+
                     {/* Voice Selector */}
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
                             <span className="text-[11px] font-black opacity-40 uppercase tracking-widest">
-                                {ttsProvider === 'system' ? 'Device Voice' : `${ttsProvider.toUpperCase()} Voice`}
+                                {ttsProvider === 'system' ? 'Device Voice' : ttsProvider === 'kokoro' ? 'Kokoro AI Voice' : ttsProvider === 'edge' ? 'Edge Neural Voice' : 'Google Voice'}
                             </span>
                             <span className="text-[10px] font-black text-blue-500 bg-blue-500/10 px-3 py-1 rounded-full uppercase">
                                 {ttsProvider === 'system' ? `${availableVoices.length} Voices` : `${externalVoices.length} Voices`}

@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Book, TtsProvider, ScrollMode, ExternalVoice } from './types';
 import { updateBookProgress } from './persistence';
 import { findBlockIdx } from './parsers';
-import { getEdgeVoices, getEdgeStreamUrl, prefetchEdgeAudio, POPULAR_EDGE_VOICES } from './services/edgeTts';
+import { getEdgeVoices, getEdgeStreamUrl, prefetchEdgeAudio, POPULAR_EDGE_VOICES, EDGE_READING_STYLES } from './services/edgeTts';
 import { GOOGLE_VOICES, getGoogleStreamUrl } from './services/googleTts';
+import { KOKORO_VOICES, getKokoroAudioUrl, prefetchKokoroAudio } from './services/kokoroTts';
 
 export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const [isPlaying, setIsPlaying] = useState(false);
@@ -11,9 +12,11 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const [playbackSpeed, setPlaybackSpeed] = useState(() => parseFloat(localStorage.getItem('reader_speed') || '1.0'));
     const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
     const [externalVoices, setExternalVoices] = useState<ExternalVoice[]>([]);
+    const [readingStyle, setReadingStyle] = useState<string>(() => localStorage.getItem('reader_edge_style') || 'general');
     const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>(() => {
         const prov = localStorage.getItem('reader_provider') || 'edge';
         if (prov === 'edge') return localStorage.getItem('reader_voice_edge') || 'en-US-JennyNeural';
+        if (prov === 'kokoro') return localStorage.getItem('reader_voice_kokoro') || 'af_heart';
         if (prov === 'google') return localStorage.getItem('reader_voice_google') || 'en';
         return localStorage.getItem('reader_voice') || '';
     });
@@ -21,7 +24,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() => localStorage.getItem('reader_output_device') || "");
     const [ttsProvider, setTtsProviderState] = useState<TtsProvider>(() => {
         const saved = localStorage.getItem('reader_provider');
-        if (saved === 'system' || saved === 'edge' || saved === 'google') return saved as TtsProvider;
+        if (saved === 'system' || saved === 'edge' || saved === 'kokoro' || saved === 'google') return saved as TtsProvider;
         return 'edge'; // Default to fast Edge Neural with 320+ voices
     });
     const [providerStatus, setProviderStatus] = useState<string>('');
@@ -47,10 +50,12 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     // Persist settings
     useEffect(() => localStorage.setItem('reader_speed', playbackSpeed.toString()), [playbackSpeed]);
     useEffect(() => localStorage.setItem('reader_provider', ttsProvider), [ttsProvider]);
+    useEffect(() => localStorage.setItem('reader_edge_style', readingStyle), [readingStyle]);
     useEffect(() => {
         if (!selectedVoiceURI) return;
         if (ttsProvider === 'system') localStorage.setItem('reader_voice', selectedVoiceURI);
         else if (ttsProvider === 'edge') localStorage.setItem('reader_voice_edge', selectedVoiceURI);
+        else if (ttsProvider === 'kokoro') localStorage.setItem('reader_voice_kokoro', selectedVoiceURI);
         else if (ttsProvider === 'google') localStorage.setItem('reader_voice_google', selectedVoiceURI);
     }, [selectedVoiceURI, ttsProvider]);
     useEffect(() => { if (selectedDeviceId) localStorage.setItem('reader_output_device', selectedDeviceId); }, [selectedDeviceId]);
@@ -180,6 +185,11 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                 const found = voices.find(v => v.id === saved) || voices[0];
                 if (found) setSelectedVoiceURI(found.id);
             });
+        } else if (newProvider === 'kokoro') {
+            setExternalVoices(KOKORO_VOICES);
+            const saved = localStorage.getItem('reader_voice_kokoro') || 'af_heart';
+            const found = KOKORO_VOICES.find(v => v.id === saved) || KOKORO_VOICES[0];
+            if (found) setSelectedVoiceURI(found.id);
         } else if (newProvider === 'google') {
             setExternalVoices(GOOGLE_VOICES);
             const saved = localStorage.getItem('reader_voice_google') || 'en';
@@ -192,6 +202,8 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
     useEffect(() => {
         if (ttsProvider === 'edge') {
             getEdgeVoices().then(voices => setExternalVoices(voices));
+        } else if (ttsProvider === 'kokoro') {
+            setExternalVoices(KOKORO_VOICES);
         } else if (ttsProvider === 'google') {
             setExternalVoices(GOOGLE_VOICES);
         }
@@ -421,13 +433,17 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         window.speechSynthesis.speak(utt);
     }, [availableVoices, selectedVoiceURI, playbackSpeed, saveProgressThrottled, updateMediaSessionPosition, requestWakeLock, startChromeBgWorkaround, advanceToNextBlock, activeBook, setCurrentWordIndex, stopAllAudio]);
 
-    // Instant Audio-Stream Playback (Edge Neural & Google Speech) - Starts in <150ms with Zero API Keys
+    // Instant Audio-Stream Playback (Edge Neural, Kokoro AI & Google Speech) - Starts in <150ms with Zero API Keys
     const speakWithAudioStream = useCallback(async (text: string, block: any, offset: number, sId: number) => {
         stopAllAudio();
         try {
             let streamUrl = '';
             if (ttsProvider === 'edge') {
-                streamUrl = getEdgeStreamUrl(text, selectedVoiceURI || 'en-US-JennyNeural');
+                streamUrl = getEdgeStreamUrl(text, selectedVoiceURI || 'en-US-JennyNeural', readingStyle);
+            } else if (ttsProvider === 'kokoro') {
+                setProviderStatus('Generating Kokoro AI Neural Speech...');
+                streamUrl = await getKokoroAudioUrl(text, selectedVoiceURI || 'af_heart', playbackSpeed, (msg) => setProviderStatus(msg));
+                setProviderStatus('');
             } else if (ttsProvider === 'google') {
                 streamUrl = getGoogleStreamUrl(text, selectedVoiceURI || 'en');
             }
@@ -437,8 +453,13 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
             // Prefetch upcoming block while this one is starting!
             const currentBlockIdx = findBlockIdx(block.wordStartIndex, activeBook!.displayBlocks);
             const nextBlock = activeBook!.displayBlocks[currentBlockIdx + 1];
-            if (nextBlock && ttsProvider === 'edge') {
-                prefetchEdgeAudio(nextBlock.words.join(" "), selectedVoiceURI);
+            if (nextBlock) {
+                const nextText = nextBlock.words.join(" ");
+                if (ttsProvider === 'edge') {
+                    prefetchEdgeAudio(nextText, selectedVoiceURI, readingStyle);
+                } else if (ttsProvider === 'kokoro') {
+                    prefetchKokoroAudio(nextText, selectedVoiceURI, playbackSpeed);
+                }
             }
 
             const audio = new Audio();
@@ -525,7 +546,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
                 }
             }, 1000);
         }
-    }, [ttsProvider, selectedVoiceURI, playbackSpeed, selectedDeviceId, stopAllAudio, requestWakeLock, updateMediaSessionPosition, activeBook, saveProgressThrottled, advanceToNextBlock, setCurrentWordIndex]);
+    }, [ttsProvider, selectedVoiceURI, readingStyle, playbackSpeed, selectedDeviceId, stopAllAudio, requestWakeLock, updateMediaSessionPosition, activeBook, saveProgressThrottled, advanceToNextBlock, setCurrentWordIndex]);
 
     const speak = useCallback(async () => {
         if (!activeBook || !isPlayingRef.current) return;
@@ -778,6 +799,7 @@ export function useTTS(activeBook: Book | null, scrollMode: ScrollMode) {
         playbackSpeed, setPlaybackSpeed,
         availableVoices, externalVoices,
         selectedVoiceURI, setSelectedVoiceURI,
+        readingStyle, setReadingStyle,
         availableDevices, selectedDeviceId, setSelectedDeviceId,
         ttsProvider, setTtsProvider,
         providerStatus,

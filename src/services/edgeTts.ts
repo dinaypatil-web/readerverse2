@@ -1,4 +1,16 @@
-import { ExternalVoice } from '../types';
+import { ExternalVoice, ReadingStyle } from '../types';
+
+export const EDGE_READING_STYLES: ReadingStyle[] = [
+    { id: 'general', label: 'Natural / Default', description: 'Standard balanced neural reading', emoji: '🎙️' },
+    { id: 'narration-relaxed', label: 'Audiobook Storyteller', description: 'Warm, relaxed pacing for novels & stories', emoji: '📖' },
+    { id: 'empathetic', label: 'Empathetic & Warm', description: 'Gentle, thoughtful, caring tone', emoji: '☕' },
+    { id: 'cheerful', label: 'Cheerful & Upbeat', description: 'Energetic, lively and positive', emoji: '✨' },
+    { id: 'calm', label: 'Calm & Soothing', description: 'Meditative, quiet bedtime pace', emoji: '🌙' },
+    { id: 'poetry-reading', label: 'Poetic & Dramatic', description: 'Lyrical cadence with measured pauses', emoji: '🎭' },
+    { id: 'newscast', label: 'Professional Narrator', description: 'Clear, crisp, articulate non-fiction style', emoji: '📰' },
+    { id: 'chat', label: 'Casual Conversational', description: 'Relaxed dialogue and conversational cadence', emoji: '💬' },
+    { id: 'whispering', label: 'Whispering', description: 'Soft and intimate whisper', emoji: '🤫' },
+];
 
 export const POPULAR_EDGE_VOICES: ExternalVoice[] = [
     // English (US)
@@ -64,15 +76,19 @@ export async function getEdgeVoices(): Promise<ExternalVoice[]> {
     return POPULAR_EDGE_VOICES;
 }
 
-// Instant Direct Stream URL - browser starts playing within <150ms
-export function getEdgeStreamUrl(text: string, voiceId: string): string {
-    return `/api/tts/edge/stream?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId || 'en-US-JennyNeural')}`;
+// Instant Direct Stream URL with optional SSML Reading Style
+export function getEdgeStreamUrl(text: string, voiceId: string, style?: string): string {
+    let url = `/api/tts/edge/stream?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId || 'en-US-JennyNeural')}`;
+    if (style && style !== 'general' && style !== 'default') {
+        url += `&style=${encodeURIComponent(style)}`;
+    }
+    return url;
 }
 
 // Prefetch upcoming block audio in background for 0ms pause between blocks
-export function prefetchEdgeAudio(text: string, voiceId: string): void {
+export function prefetchEdgeAudio(text: string, voiceId: string, style?: string): void {
     if (!text || text.trim().length === 0) return;
-    const url = getEdgeStreamUrl(text, voiceId);
+    const url = getEdgeStreamUrl(text, voiceId, style);
     if (prefetchAudioPool.has(url)) return;
 
     // Keep pool limited to 3 items

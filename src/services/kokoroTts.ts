@@ -65,16 +65,18 @@ export function isKokoroLoaded(): boolean {
 export async function synthesizeKokoroTTS(
     text: string,
     voiceId: string,
+    speed: number = 1.0,
     onStatus?: (msg: string) => void
 ): Promise<Blob> {
     const tts = await getKokoroInstance(onStatus);
     onStatus?.('Synthesizing with Kokoro AI...');
 
     const audioResult = await tts.generate(text, {
-        voice: voiceId || 'af_heart'
+        voice: voiceId || 'af_heart',
+        speed: speed || 1.0
     });
 
-    onStatus?.('Synthesis complete');
+    onStatus?.('Kokoro AI synthesis ready');
 
     // audioResult contains .toBlob() or .audio data
     if (typeof audioResult.toBlob === 'function') {
@@ -87,6 +89,43 @@ export async function synthesizeKokoroTTS(
     }
 
     throw new Error('Unsupported Kokoro audio output format');
+}
+
+const kokoroUrlCache = new Map<string, string>();
+
+export async function getKokoroAudioUrl(
+    text: string,
+    voiceId: string,
+    speed: number = 1.0,
+    onStatus?: (msg: string) => void
+): Promise<string> {
+    const key = `${voiceId}:${speed}:${text}`;
+    if (kokoroUrlCache.has(key)) {
+        return kokoroUrlCache.get(key)!;
+    }
+
+    const blob = await synthesizeKokoroTTS(text, voiceId, speed, onStatus);
+    const url = URL.createObjectURL(blob);
+
+    // Keep cache bounded to 5 items to manage memory
+    if (kokoroUrlCache.size > 5) {
+        const oldest = kokoroUrlCache.keys().next().value;
+        if (oldest) {
+            const oldUrl = kokoroUrlCache.get(oldest);
+            if (oldUrl) URL.revokeObjectURL(oldUrl);
+            kokoroUrlCache.delete(oldest);
+        }
+    }
+
+    kokoroUrlCache.set(key, url);
+    return url;
+}
+
+export function prefetchKokoroAudio(text: string, voiceId: string, speed: number = 1.0): void {
+    if (!text || text.trim().length === 0) return;
+    const key = `${voiceId}:${speed}:${text}`;
+    if (kokoroUrlCache.has(key)) return;
+    getKokoroAudioUrl(text, voiceId, speed).catch(() => {});
 }
 
 // Lightweight PCM to WAV Blob converter

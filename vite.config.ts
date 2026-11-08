@@ -38,11 +38,12 @@ function edgeTtsPlugin(): Plugin {
         return;
       }
 
-      // 2. Edge Direct Instant Stream (GET) - starts in <150ms
+      // 2. Edge Direct Instant Stream (GET) - starts in <150ms with optional SSML Reading Styles
       if (pathname === '/api/tts/edge/stream' && req.method === 'GET') {
         try {
           const text = parsedUrl.searchParams.get('text');
           const voice = parsedUrl.searchParams.get('voice') || 'en-US-JennyNeural';
+          const style = parsedUrl.searchParams.get('style');
 
           if (!text) {
             res.statusCode = 400;
@@ -52,26 +53,49 @@ function edgeTtsPlugin(): Plugin {
 
           const tts = new MsEdgeTTS();
           await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-          const { audioStream } = tts.toStream(text);
 
-          const chunks: Buffer[] = [];
-          audioStream.on('data', (chunk: Buffer) => chunks.push(chunk));
-          audioStream.on('close', () => {
-            const buffer = Buffer.concat(chunks);
-            res.setHeader('Content-Type', 'audio/mpeg');
-            res.setHeader('Content-Length', buffer.length);
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Cache-Control', 'public, max-age=86400');
-            res.end(buffer);
-          });
+          let formattedText = text;
+          if (style && style !== 'general' && style !== 'default') {
+            const escaped = text
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&apos;');
+            formattedText = `<mstts:express-as style="${style}">${escaped}</mstts:express-as>`;
+          }
 
-          audioStream.on('error', (err: any) => {
-            console.error('Edge stream error:', err);
-            if (!res.headersSent) {
-              res.statusCode = 500;
-              res.end('Stream error');
-            }
-          });
+          const streamSynthesis = (input: string) => {
+            const { audioStream } = tts.toStream(input);
+            const chunks: Buffer[] = [];
+            audioStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+            audioStream.on('close', () => {
+              if (chunks.length === 0 && input !== text) {
+                // If voice doesn't support the requested style, gracefully fallback to raw text
+                return streamSynthesis(text);
+              }
+              const buffer = Buffer.concat(chunks);
+              res.setHeader('Content-Type', 'audio/mpeg');
+              res.setHeader('Content-Length', buffer.length);
+              res.setHeader('Access-Control-Allow-Origin', '*');
+              res.setHeader('Cache-Control', 'public, max-age=86400');
+              res.end(buffer);
+            });
+
+            audioStream.on('error', (err: any) => {
+              if (input !== text) {
+                // Graceful fallback to unstyled text
+                return streamSynthesis(text);
+              }
+              console.error('Edge stream error:', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.end('Stream error: ' + (err.message || 'unknown'));
+              }
+            });
+          };
+
+          streamSynthesis(formattedText);
         } catch (err: any) {
           console.error('Edge stream exception:', err);
           if (!res.headersSent) {
